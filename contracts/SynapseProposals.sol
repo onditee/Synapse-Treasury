@@ -21,6 +21,7 @@ contract SynapseProposals {
         uint256 abstainVotes;
         bool executed;
         bool isAgentProposal;
+        string metadataCID; // IPFS CID for proposal metadata
     }
 
     // STATE VARIABLES
@@ -44,7 +45,8 @@ contract SynapseProposals {
         address indexed proposer,
         ProposalType pType,
         uint256 amount,
-        bool isAgentProposal
+        bool isAgentProposal,
+        string metadataCID
     );
     
     event Voted(
@@ -80,8 +82,10 @@ contract SynapseProposals {
     function createProposal(
         ProposalType _type,
         uint256 _amount,
-        bool _isAgentProposal
+        bool _isAgentProposal,
+        string memory _metadataCID
     ) external returns (uint256) {
+        require(bytes(_metadataCID).length > 0, "Metadata required");
         // Validate proposer type
         if(_isAgentProposal) {
             require(authorizedAgents[msg.sender], "Agent not authorized");
@@ -103,13 +107,15 @@ contract SynapseProposals {
         newProposal.createdAt = block.timestamp;
         newProposal.deadline = block.timestamp + VOTE_DURATION;
         newProposal.isAgentProposal = _isAgentProposal;
+        newProposal.metadataCID = _metadataCID;
 
         emit ProposalCreated(
             proposalCount,
             msg.sender,
             _type,
             _amount,
-            _isAgentProposal
+            _isAgentProposal,
+            _metadataCID
         );
 
         return proposalCount++;
@@ -159,9 +165,10 @@ contract SynapseProposals {
     // AGENTIC FUNCTIONS 
     function agentCreateProposal(
         ProposalType _type,
-        uint256 _amount
+        uint256 _amount,
+        string memory _metadataCID
     ) external onlyAgent returns (uint256) {
-        return createProposal(_type, _amount, true);
+        return createProposal(_type, _amount, true, _metadataCID);
     }
 
     function agentVote(uint256 _proposalId, VoteOption _vote) external onlyAgent {
