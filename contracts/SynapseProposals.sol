@@ -121,11 +121,7 @@ contract SynapseProposals {
         return proposalCount++;
     }
 
-    function vote(
-        uint256 _proposalId,
-        VoteOption _vote,
-        bool _isAgentVote
-    ) external {
+    function vote( uint256 _proposalId, VoteOption _vote, bool _isAgentVote) external {
         Proposal storage proposal = proposals[_proposalId];
         require(block.timestamp <= proposal.deadline, "Voting period ended");
         require(!hasVoted[_proposalId][msg.sender], "Already voted");
