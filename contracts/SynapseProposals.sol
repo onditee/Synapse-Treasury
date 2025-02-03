@@ -37,7 +37,9 @@ contract SynapseProposals {
     mapping(address => bool) public authorizedAgents;
     mapping(uint256 => Proposal) public proposals;
     mapping(uint256 => mapping(address => bool)) public hasVoted;
+    mapping(address => uint256) public votingPower;
     
+    uint256 public totalVotingPower;
     uint256 public proposalCount;
 
     // EVENTS
@@ -83,6 +85,28 @@ contract SynapseProposals {
         treasury = ITreasury(_treasury);
     }
 
+    // USER Initialization FUNCTIONS (If I have time i might abstract this to a separate contract)
+    // I can make the voting power more autonomous
+    function addProposer(
+        address _proposer, 
+        uint256 _votingPower) external onlyOwner {
+        
+        require(!authorizedProposers[_proposer], "Already proposer");
+        authorizedProposers[_proposer] = true;
+        votingPower[_proposer] = _votingPower;
+        totalVotingPower += _votingPower;
+    }
+
+    function addAgent(
+        address _agent, 
+        uint256 _votingPower) external onlyOwner {
+
+        require(!authorizedAgents[_agent], "Already agent");
+        authorizedAgents[_agent] = true;
+        votingPower[_agent] = _votingPower;
+        totalVotingPower += _votingPower;
+        
+    }
     //CORE FUNCTIONS 
     function createProposal(
         ProposalType _type,
