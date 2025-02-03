@@ -9,7 +9,7 @@ interface IAavePool {
     function withdraw(address asset, uint256 amount, address to) external;
 }
 
-contract SynapseTreasury is ReentrancyGuard {
+contract Treasury is ReentrancyGuard {
     // STATE VARIABLES
     address public owner;
     address public proposalsContract;
