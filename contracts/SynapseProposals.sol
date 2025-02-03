@@ -56,7 +56,8 @@ contract SynapseProposals {
         uint256 indexed proposalId,
         address indexed voter,
         VoteOption vote,
-        bool isAgentVote
+        bool isAgentVote,
+        uint256 powerUsed
     );
     event ProposalExecuted(
         uint256 indexed proposalId,
@@ -174,7 +175,7 @@ contract SynapseProposals {
         else if(_vote == VoteOption.NO) proposal.noVotes+= power;
         else proposal.abstainVotes+= power; //I'll fix this during testing not necessary
 
-        emit Voted(_proposalId, msg.sender, _vote, _isAgentVote);
+        emit Voted(_proposalId, msg.sender, _vote, _isAgentVote, power);
     }
 
     function executeProposal(uint256 _proposalId) external {
