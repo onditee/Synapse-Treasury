@@ -174,7 +174,7 @@ contract SynapseProposals {
         else if(_vote == VoteOption.NO) proposal.noVotes+= power;
         else proposal.abstainVotes+= power; //I'll fix this during testing not necessary
 
-        emit Voted(_proposalId, msg.sender, _vote, _isAgentVote, power);
+        emit Voted(_proposalId, msg.sender, _vote, _isAgentVote);
     }
 
     function executeProposal(uint256 _proposalId) external {
@@ -225,4 +225,16 @@ contract SynapseProposals {
     function updateTreasury(address _newTreasury) external onlyOwner {
         treasury = ITreasury(_newTreasury);
     }
+
+    function updateVotingPower( address _address, uint256 _newPower) external onlyOwner {
+        uint256 oldPower = votingPower[_address];
+        totalVotingPower = totalVotingPower - oldPower + _newPower;
+        votingPower[_address] = _newPower;
+        }
+        
+    function removeVotingPower(address _address) external onlyOwner {
+        uint256 oldPower = votingPower[_address];
+        totalVotingPower -= oldPower;
+        votingPower[_address] = 0;
+        }
 }
