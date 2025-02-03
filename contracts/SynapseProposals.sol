@@ -90,6 +90,10 @@ contract SynapseProposals {
         bool _isAgentProposal,
         string memory _metadataCID
     ) public returns (uint256) {
+        //Check if proposer is authorized
+        require(
+        authorizedProposers[msg.sender] || authorizedAgents[msg.sender],
+        "Unauthorized");
         require(bytes(_metadataCID).length > 0, "Metadata required");
         // Validate proposer type
         if(_isAgentProposal) {
