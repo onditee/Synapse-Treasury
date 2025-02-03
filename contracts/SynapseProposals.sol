@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 interface ITreasury {
     function getBalance() external view returns (uint256);
+    function executeTransfer(address recipient, uint256 amount) external;
 }
 
 contract SynapseProposals {
@@ -55,6 +56,10 @@ contract SynapseProposals {
         VoteOption vote,
         bool isAgentVote
     );
+    event ProposalExecuted(
+        uint256 indexed proposalId,
+        address executor
+    );
 
     //  MODIFIERS
     modifier onlyOwner() {
@@ -84,7 +89,7 @@ contract SynapseProposals {
         uint256 _amount,
         bool _isAgentProposal,
         string memory _metadataCID
-    ) external returns (uint256) {
+    ) public returns (uint256) {
         require(bytes(_metadataCID).length > 0, "Metadata required");
         // Validate proposer type
         if(_isAgentProposal) {
@@ -121,7 +126,7 @@ contract SynapseProposals {
         return proposalCount++;
     }
 
-    function vote( uint256 _proposalId, VoteOption _vote, bool _isAgentVote) external {
+    function vote( uint256 _proposalId, VoteOption _vote, bool _isAgentVote) public {
         Proposal storage proposal = proposals[_proposalId];
         require(block.timestamp <= proposal.deadline, "Voting period ended");
         require(!hasVoted[_proposalId][msg.sender], "Already voted");
@@ -155,7 +160,13 @@ contract SynapseProposals {
         require(proposal.yesVotes > proposal.noVotes, "Proposal rejected");
 
         proposal.executed = true;
-        // Execute fund transfer logic here (would interact with Treasury contract)
+        // Execute fund transfer
+        address recipientAddress = proposal.proposer;
+        treasury.executeTransfer(recipientAddress, proposal.amount);
+
+        // Emit event for proposal execution
+        emit ProposalExecuted(_proposalId, msg.sender);
+        
     }
 
     // AGENTIC FUNCTIONS 
