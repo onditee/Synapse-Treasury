@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
-
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 interface ITreasury {
     function getBalance() external view returns (uint256);
     function executeTransfer(address recipient, uint256 amount) external;
