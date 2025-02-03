@@ -158,6 +158,9 @@ contract SynapseProposals {
         Proposal storage proposal = proposals[_proposalId];
         require(block.timestamp <= proposal.deadline, "Voting period ended");
         require(!hasVoted[_proposalId][msg.sender], "Already voted");
+        require(votingPower[msg.sender] > 0, "No voting power");
+
+        uint256 power = votingPower[msg.sender];
 
         // Agent validation
         if(_isAgentVote) {
@@ -167,11 +170,11 @@ contract SynapseProposals {
         // Record vote
         hasVoted[_proposalId][msg.sender] = true;
         
-        if(_vote == VoteOption.YES) proposal.yesVotes++;
-        else if(_vote == VoteOption.NO) proposal.noVotes++;
-        else proposal.abstainVotes++;
+        if(_vote == VoteOption.YES) proposal.yesVotes+= power;
+        else if(_vote == VoteOption.NO) proposal.noVotes+= power;
+        else proposal.abstainVotes+= power; //I'll fix this during testing not necessary
 
-        emit Voted(_proposalId, msg.sender, _vote, _isAgentVote);
+        emit Voted(_proposalId, msg.sender, _vote, _isAgentVote, power);
     }
 
     function executeProposal(uint256 _proposalId) external {
@@ -179,9 +182,9 @@ contract SynapseProposals {
         require(!proposal.executed, "Already executed");
         require(block.timestamp > proposal.deadline, "Voting ongoing");
 
-        // Calculate quorum
+        // Calculate quorum //do tests
         uint256 totalVotes = proposal.yesVotes + proposal.noVotes + proposal.abstainVotes;
-        uint256 quorum = (treasury.getBalance() * QUORUM_PERCENT) / 100;
+        uint256 quorum = (totalVotingPower * QUORUM_PERCENT) / 100;
         require(totalVotes >= quorum, "Quorum not met");
 
         // Check majority
