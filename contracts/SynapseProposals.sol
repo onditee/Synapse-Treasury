@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "c:/Users/Ted/node_modules/@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 interface ITreasury {
     function getBalance() external view returns (uint256);
@@ -25,6 +25,7 @@ contract SynapseProposals is ReentrancyGuard {
         bool executed;
         bool isAgentProposal;
         string metadataCID; // IPFS CID for proposal metadata
+        address recipent;
     }
 
     // STATE VARIABLES
@@ -115,7 +116,8 @@ contract SynapseProposals is ReentrancyGuard {
         ProposalType _type,
         uint256 _amount,
         bool _isAgentProposal,
-        string memory _metadataCID
+        string memory _metadataCID,
+        address _recipient
     ) public returns (uint256) {
         //Check if proposer is authorized
         require(
@@ -144,6 +146,7 @@ contract SynapseProposals is ReentrancyGuard {
         newProposal.deadline = block.timestamp + VOTE_DURATION;
         newProposal.isAgentProposal = _isAgentProposal;
         newProposal.metadataCID = _metadataCID;
+        newProposal.recipent = _recipient;
 
         emit ProposalCreated(
             proposalCount,
@@ -195,7 +198,7 @@ contract SynapseProposals is ReentrancyGuard {
 
         proposal.executed = true;
         // Execute fund transfer
-        address recipientAddress = proposal.proposer;
+        address recipientAddress = proposal.recipent;
         treasury.executeTransfer(recipientAddress, proposal.amount);
 
         // Emit event for proposal execution
@@ -207,9 +210,10 @@ contract SynapseProposals is ReentrancyGuard {
     function agentCreateProposal(
         ProposalType _type,
         uint256 _amount,
-        string memory _metadataCID
+        string memory _metadataCID,
+        address _recipient
     ) external onlyAgent returns (uint256) {
-        return createProposal(_type, _amount, true, _metadataCID);
+        return createProposal(_type, _amount, true, _metadataCID,_recipient);
     }
 
     function agentVote(uint256 _proposalId, VoteOption _vote) external onlyAgent {
