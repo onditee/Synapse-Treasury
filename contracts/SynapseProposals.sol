@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
+
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+
 interface ITreasury {
     function getBalance() external view returns (uint256);
     function executeTransfer(address recipient, uint256 amount) external;
 }
 
-contract SynapseProposals {
+contract SynapseProposals is ReentrancyGuard {
     //STRUCTS AND ENUMS DEFINITIONS (voting options, proposal types)
     enum VoteOption { YES, NO, ABSTAIN }
     enum ProposalType { INVESTMENT, CHARITY, PROJECT, OTHER }
