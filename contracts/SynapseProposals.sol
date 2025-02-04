@@ -65,7 +65,9 @@ contract SynapseProposals is ReentrancyGuard {
     );
     event ProposalExecuted(
         uint256 indexed proposalId,
-        address executor
+        address executor,
+        uint256 amount,
+        address recipient
     );
 
     //  MODIFIERS
@@ -209,7 +211,7 @@ contract SynapseProposals is ReentrancyGuard {
         treasury.executeTransfer(recipientAddress, proposal.amount);
 
         // Emit event for proposal execution
-        emit ProposalExecuted(_proposalId, msg.sender);
+        emit ProposalExecuted(_proposalId, msg.sender, proposal.amount, proposal.recipent);
         
     }
 
