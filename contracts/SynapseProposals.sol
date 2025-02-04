@@ -183,7 +183,7 @@ contract SynapseProposals is ReentrancyGuard {
         emit Voted(_proposalId, msg.sender, _vote, _isAgentVote, power);
     }
 
-    function executeProposal(uint256 _proposalId) external {
+    function executeProposal(uint256 _proposalId) external nonReentrant {
         Proposal storage proposal = proposals[_proposalId];
         require(!proposal.executed, "Already executed");
         require(block.timestamp > proposal.deadline, "Voting ongoing");
