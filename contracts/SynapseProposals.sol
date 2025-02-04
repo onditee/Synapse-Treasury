@@ -35,6 +35,7 @@ contract SynapseProposals is ReentrancyGuard {
     uint256 public constant QUORUM_PERCENT = 20; // 20% minimum participation
     uint256 public constant VOTE_DURATION = 7 days;
     uint256 public constant MAX_TREASURY_PERCENT = 10; // Max 10% per proposal
+    uint256 public constant EXECUTION_WINDOW = 3 days; //Making sure we can reject expired proposals
     
     mapping(address => bool) public authorizedProposers;
     mapping(address => bool) public authorizedAgents;
@@ -184,7 +185,13 @@ contract SynapseProposals is ReentrancyGuard {
     }
 
     function executeProposal(uint256 _proposalId) external nonReentrant {
+        
         Proposal storage proposal = proposals[_proposalId];
+
+        require(
+            block.timestamp <= proposal.deadline + EXECUTION_WINDOW,
+            "Execution window expired"
+            );
         require(!proposal.executed, "Already executed");
         require(block.timestamp > proposal.deadline, "Voting ongoing");
 
@@ -221,10 +228,12 @@ contract SynapseProposals is ReentrancyGuard {
     }
 
     //ADMIN FUNCTIONS 
+    //****Duplicate fn remove once done*/
     function addProposer(address _proposer) external onlyOwner {
         authorizedProposers[_proposer] = true;
     }
 
+    //****Duplicate fn */
     function addAgent(address _agent) external onlyOwner {
         authorizedAgents[_agent] = true;
     }
@@ -234,6 +243,10 @@ contract SynapseProposals is ReentrancyGuard {
     }
 
     function updateVotingPower( address _address, uint256 _newPower) external onlyOwner {
+        require(
+            authorizedProposers[_address] || authorizedAgents[_address],
+            "Address not authorized"
+         );
         uint256 oldPower = votingPower[_address];
         totalVotingPower = totalVotingPower - oldPower + _newPower;
         votingPower[_address] = _newPower;
