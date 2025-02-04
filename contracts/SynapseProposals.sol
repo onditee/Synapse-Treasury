@@ -11,7 +11,7 @@ interface ITreasury {
 contract SynapseProposals is ReentrancyGuard {
     //STRUCTS AND ENUMS DEFINITIONS (voting options, proposal types)
     enum VoteOption { YES, NO, ABSTAIN }
-    enum ProposalType { INVESTMENT, CHARITY, PROJECT, OTHER }
+    enum ProposalType { INVESTMENT, CHARITY, PROJECT, DEFI_DEPOSIT, DEFI_WITHDRAW,OTHER }
     
     struct Proposal {
         address proposer;
@@ -204,6 +204,13 @@ contract SynapseProposals is ReentrancyGuard {
 
         // Check majority
         require(proposal.yesVotes > proposal.noVotes, "Proposal rejected");
+
+        //Automate DEFi Actions with Aave
+        if (proposal.pType == ProposalType.DEFI_DEPOSIT) {
+            
+            treasury.depositToAave(proposal.token, proposal.amount);
+        }
+        //****Test to see if duplication happens*****
 
         proposal.executed = true;
         // Execute fund transfer
