@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import "c:/Users/Ted/node_modules/@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "c:/Users/Ted/node_modules/@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
 interface IAavePool {
     function deposit(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external;
@@ -11,6 +12,8 @@ interface IAavePool {
 }
 
 contract Treasury is ReentrancyGuard {
+
+    AggregatorV3Interface internal ethPriceFeed = AggregatorV3Interface(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419); // ETH/USD Mainnet
     // STATE VARIABLES
     address public owner;
     address public proposalsContract;
