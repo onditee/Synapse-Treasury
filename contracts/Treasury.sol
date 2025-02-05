@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import "c:/Users/Ted/node_modules/@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "c:/Users/Ted/node_modules/@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+import "c:/Users/Ted/node_modules/@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 
 interface IAavePool {
     function deposit(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external;
@@ -91,7 +91,7 @@ contract Treasury is ReentrancyGuard {
         );
 
         //Check to make sure we are not exceeding Max aave exposure
-        uint256 maxDeposit = (getTotalAssets() * MAX_AAVE_EXPOSURE) / 100;
+        uint256 maxDeposit = (getTotalValue() * MAX_AAVE_EXPOSURE) / 100;
         
         require(_amount <= maxDeposit, "Exceeds Aave cap");
 
