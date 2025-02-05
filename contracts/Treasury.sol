@@ -15,14 +15,14 @@ contract Treasury is ReentrancyGuard {
     address public owner;
     address public proposalsContract;
     
-    mapping(address => uint256) public tokenBalances;
-    mapping(address => mapping(address => uint256)) public aaveDeposits; // [user][token] => amount
+    mapping(address => uint256) public tokenBalances; 
     mapping(address => uint256) public aavePrincipal; // Tracks principal deposited to Aave per token
     mapping(address => uint256) public yieldGenerated; // Tracks interest earned per token
     mapping(address => address) public aTokenMapping; // Maps underlying tokens to their aToken addresses
 
     IAavePool public constant AAVE_POOL = IAavePool(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
-    
+    uint256 public constant MAX_AAVE_EXPOSURE = 80; // 80% of treasury
+
     // EVENTS
     event FundsDeposited(address indexed token, uint256 amount);
     event FundsWithdrawn(address indexed token, uint256 amount);
@@ -79,6 +79,11 @@ contract Treasury is ReentrancyGuard {
             "Insufficient token balance"
         );
 
+        //Check to make sure we are not exceeding Max aave exposure
+        uint256 maxDeposit = (getTotalAssets() * MAX_AAVE_EXPOSURE) / 100;
+        
+        require(_amount <= maxDeposit, "Exceeds Aave cap");
+
         // Update token balance before transfer to Aave
         tokenBalances[_token] -= _amount;
         
@@ -89,7 +94,6 @@ contract Treasury is ReentrancyGuard {
         }
         IERC20(_token).approve(address(AAVE_POOL), _amount);
         AAVE_POOL.deposit(_token, _amount, address(this), 0);
-        aaveDeposits[address(this)][_token] += _amount;
         
         // Track principal deposited
         aavePrincipal[_token] += _amount;
@@ -101,17 +105,38 @@ contract Treasury is ReentrancyGuard {
         address _token,
         uint256 _amount
     ) external onlyProposals nonReentrant {
+        require(
+            aavePrincipal[_token] >= _amount,
+            "Withdrawal exceeds principal"
+        );
+
+        address aToken = aTokenMapping[_token];
+        uint256 currentATokenBalance = IERC20(aToken).balanceOf(address(this));
+
+        //Yeild calculation
+        uint256 principal = aavePrincipal[_token];
+
+        uint256 yield = (currentATokenBalance * _amount) / principal - _amount;
+
         AAVE_POOL.withdraw(_token, _amount, address(this));
-        aaveDeposits[address(this)][_token] -= _amount;
+        
+        //Updated balances and tracking
+        
+        tokenBalances[_token] += _amount + yield;
+        aavePrincipal[_token] -= _amount;
+        yieldGenerated[_token] += yield;
+
         emit DefiWithdrawal(_token, _amount);
+        emit YieldEarned(_token, yield);
     }
 
-    //Yeild tracking 
-    function trackYield() external {
-        uint256 yield = aaveDeposits[token] - initialDeposit;
-        emit YieldEarned(token, yield);
+    //Asset Valuation Helper 
+    function getAavePositionValue(address _token) public view returns (uint256) {
+        
+        address aToken = aTokenMapping[_token];
+        return IERC20(aToken).balanceOf(address(this));
+        
     }
-
     // ADMIN FUNCTIONS
     function setProposalsContract(address _proposals) external onlyOwner {
         proposalsContract = _proposals;
