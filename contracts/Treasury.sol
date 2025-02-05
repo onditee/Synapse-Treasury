@@ -11,10 +11,14 @@ interface IAavePool {
     function getReserveData(address asset) external view returns (uint256, address);
 }
 
+//Interface for Erc20 metadata
+interface IERC20Metadata {
+    function decimals() external view returns (uint8);
+}
 contract Treasury is ReentrancyGuard {
 
-    AggregatorV3Interface internal ethPriceFeed = AggregatorV3Interface(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419); // ETH/USD Mainnet
-    
+    AggregatorV3Interface internal ethPriceFeed; //= AggregatorV3Interface(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419); // ETH/USD Mainnet
+    mapping(address => AggregatorV3Interface) public priceFeeds; // Token -> Price Feed 
     // STATE VARIABLES
     address public owner;
     address public proposalsContract;
@@ -49,7 +53,10 @@ contract Treasury is ReentrancyGuard {
     // CONSTRUCTOR
     constructor() {
         owner = msg.sender;
-        
+        ethPriceFeed = AggregatorV3Interface(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419);
+        //Other price feeds
+        priceFeeds[0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48] = AggregatorV3Interface(0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6); // USDC/USD
+        priceFeeds[0x6B175474E89094C44Da98b954EedeAC495271d0F] = AggregatorV3Interface(0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9); // DAI/USD
     }
 
     // CORE FUNCTIONS
@@ -141,13 +148,62 @@ contract Treasury is ReentrancyGuard {
         return IERC20(aToken).balanceOf(address(this));
         
     }
-
+    //Oracle Functions
     function getAssetValue(address token) public view returns (uint256) {
         
-        (, int price,,,) = ethPriceFeed.latestRoundData();
-        return (tokenBalances[token] * uint256(price)) / (10 ** ethPriceFeed.decimals());
-        
+        if(token == address(0)) { // ETH
+            uint256 ethPrice = getLatestPrice(ethPriceFeed);
+            return (tokenBalances[token] * ethPrice) / (10 ** ethPriceFeed.decimals());
         }
+
+        AggregatorV3Interface feed = priceFeeds[token];
+        require(address(feed) != address(0), "Price feed not found");
+        
+        uint256 tokenPrice = getLatestPrice(feed);
+        uint256 tokenDecimals = 10 ** IERC20Metadata(token).decimals();
+        
+        return (tokenBalances[token] * tokenPrice) / tokenDecimals;
+    }
+
+    function getTotalValue() public view returns (uint256) {
+        
+        uint256 total = getAssetValue(address(0)); // ETH value
+        
+        //Stablecoin values
+        address[] memory stablecoins = new address[](2);
+        stablecoins[0] = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // USDC
+        stablecoins[1] = 0x6B175474E89094C44Da98b954EedeAC495271d0F; // DAI
+        
+        for(uint256 i = 0; i < stablecoins.length; i++) {
+            total += getAssetValue(stablecoins[i]);
+        }
+        
+        return total;
+    }
+
+    function getEthAllocation() public view returns (uint256) {
+        
+        uint256 ethValue = getAssetValue(address(0));
+        uint256 totalValue = getTotalValue();
+        return (ethValue * 100) / totalValue;
+    }
+
+
+    function getLatestPrice(AggregatorV3Interface priceFeed) internal view returns (uint256) {
+        (
+            ,
+            int256 price,
+            ,
+            uint256 timeStamp,
+        ) = priceFeed.latestRoundData();
+        
+        require(price > 0, "Invalid price");
+        require(timeStamp >= block.timestamp - 1 hours, "Stale price");
+        
+        return uint256(price);
+    }
+
+
     // ADMIN FUNCTIONS
     function setProposalsContract(address _proposals) external onlyOwner {
         proposalsContract = _proposals;
@@ -162,6 +218,11 @@ contract Treasury is ReentrancyGuard {
         } else {
             IERC20(_token).transfer(owner, _amount);
         }
+    }
+    function updatePriceFeed(address token, address feed) external onlyOwner {
+
+        require(feed != address(0), "Invalid feed address");
+        priceFeeds[token] = AggregatorV3Interface(feed);
     }
 
     // Accept ETH deposits

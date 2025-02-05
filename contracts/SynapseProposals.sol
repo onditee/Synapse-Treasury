@@ -70,6 +70,7 @@ contract SynapseProposals is ReentrancyGuard {
         address recipient
     );
 
+
     //  MODIFIERS
     modifier onlyOwner() {
         require(msg.sender == owner, "Unauthorized");
