@@ -6,6 +6,7 @@ import "c:/Users/Ted/node_modules/@openzeppelin/contracts/utils/ReentrancyGuard.
 interface ITreasury {
     function getBalance() external view returns (uint256);
     function executeTransfer(address recipient, uint256 amount) external;
+    function depositToAave(address token,uint256 amount) external;
 }
 
 contract SynapseProposals is ReentrancyGuard {
@@ -26,6 +27,7 @@ contract SynapseProposals is ReentrancyGuard {
         bool isAgentProposal;
         string metadataCID; // IPFS CID for proposal metadata
         address recipent;
+        address token;
     }
 
     // STATE VARIABLES
