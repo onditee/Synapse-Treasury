@@ -14,6 +14,7 @@ interface IAavePool {
 contract Treasury is ReentrancyGuard {
 
     AggregatorV3Interface internal ethPriceFeed = AggregatorV3Interface(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419); // ETH/USD Mainnet
+    
     // STATE VARIABLES
     address public owner;
     address public proposalsContract;
@@ -140,6 +141,13 @@ contract Treasury is ReentrancyGuard {
         return IERC20(aToken).balanceOf(address(this));
         
     }
+
+    function getAssetValue(address token) public view returns (uint256) {
+        
+        (, int price,,,) = ethPriceFeed.latestRoundData();
+        return (tokenBalances[token] * uint256(price)) / (10 ** ethPriceFeed.decimals());
+        
+        }
     // ADMIN FUNCTIONS
     function setProposalsContract(address _proposals) external onlyOwner {
         proposalsContract = _proposals;
