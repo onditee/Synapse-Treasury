@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import "c:/Users/Ted/node_modules/@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "c:/Users/Ted/node_modules/@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "c:/Users/Ted/node_modules/@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
-import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
+import "c:/Users/Ted/node_modules/@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 
 interface IAavePool {
     function deposit(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external;
