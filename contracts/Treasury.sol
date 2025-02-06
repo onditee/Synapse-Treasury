@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 import "c:/Users/Ted/node_modules/@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "c:/Users/Ted/node_modules/@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "c:/Users/Ted/node_modules/@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 
 interface IAavePool {
     function deposit(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external;
@@ -22,14 +23,26 @@ contract Treasury is ReentrancyGuard {
     // STATE VARIABLES
     address public owner;
     address public proposalsContract;
+    IUniswapV2Router02 public uniswapRouter = IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
+    address public agentKitOperator;
+
+    struct AssetConfig {
+        uint256 target;         // Target allocation percentage (100 = 1%)
+        uint256 upperThreshold; // Max deviation above target
+        uint256 lowerThreshold; // Max deviation below target
+        address[] swapPath;     // Default swap path for rebalancing
+    }
     
     mapping(address => uint256) public tokenBalances; 
     mapping(address => uint256) public aavePrincipal; // Tracks principal deposited to Aave per token
     mapping(address => uint256) public yieldGenerated; // Tracks interest earned per token
     mapping(address => address) public aTokenMapping; // Maps underlying tokens to their aToken addresses
+    mapping(address => AssetConfig) public assetConfigs;
+    
 
     IAavePool public constant AAVE_POOL = IAavePool(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
     uint256 public constant MAX_AAVE_EXPOSURE = 80; // 80% of treasury
+    uint256 public constant MAX_SLIPPAGE = 5; // 5% slippage protection
 
     // EVENTS
     event FundsDeposited(address indexed token, uint256 amount);
@@ -37,6 +50,8 @@ contract Treasury is ReentrancyGuard {
     event DefiDeposit(address indexed token, uint256 amount);
     event DefiWithdrawal(address indexed token, uint256 amount);
     event YieldEarned(address token, uint256 amount);
+    event RebalanceTriggered(address indexed asset, uint256 amountSold, uint256 amountBought);
+    event AllocationConfigured(address indexed asset, uint256 target, uint256 upper, uint256 lower);
 
     // MODIFIERS
     modifier onlyOwner() {
@@ -48,7 +63,10 @@ contract Treasury is ReentrancyGuard {
         require(msg.sender == proposalsContract, "Only proposals contract");
         _;
     }
-    
+    modifier onlyAgentKit() {
+        require(msg.sender == agentKitOperator, "Only AgentKit");
+        _;
+    }
 
     // CONSTRUCTOR
     constructor() {
@@ -141,6 +159,7 @@ contract Treasury is ReentrancyGuard {
         emit YieldEarned(_token, yield);
     }
 
+
     //Asset Valuation Helper 
     function getAavePositionValue(address _token) public view returns (uint256) {
         
@@ -148,6 +167,95 @@ contract Treasury is ReentrancyGuard {
         return IERC20(aToken).balanceOf(address(this));
         
     }
+
+    // Asset configuration management
+    function configureAsset(
+        address _asset,
+        uint256 _target,
+        uint256 _upperThreshold,
+        uint256 _lowerThreshold,
+        address[] calldata _swapPath
+    ) external onlyOwner {
+        require(_target + _upperThreshold <= 100, "Invalid thresholds");
+        assetConfigs[_asset] = AssetConfig({
+            target: _target,
+            upperThreshold: _upperThreshold,
+            lowerThreshold: _lowerThreshold,
+            swapPath: _swapPath
+        });
+        emit AllocationConfigured(_asset, _target, _upperThreshold, _lowerThreshold);
+    }
+
+    // Core rebalancing logic
+    function _rebalanceAsset(address _asset, uint256 _totalValue) internal {
+        AssetConfig memory config = assetConfigs[_asset];
+        if(config.target == 0) return;
+
+        uint256 currentAllocation = (getAssetValue(_asset) * 100) / _totalValue;
+        
+        if(currentAllocation > config.target + config.upperThreshold) {
+            _sellExcess(_asset, _totalValue, currentAllocation, config);
+        }
+        else if(currentAllocation < config.target - config.lowerThreshold) {
+            _buyNeeded(_asset, _totalValue, currentAllocation, config);
+        }
+    }
+
+    function checkAndRebalance() external onlyAgentKit nonReentrant {
+        uint256 totalValue = getTotalValue();
+        require(totalValue > 0, "No assets to rebalance");
+        
+        // Check ETH allocation first
+        _rebalanceAsset(address(0), totalValue);
+        
+        // Check configured assets
+        address[] memory assets = new address[](2);
+        assets[0] = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // USDC
+        assets[1] = 0x6B175474E89094C44Da98b954EedeAC495271d0F; // DAI
+        
+        for(uint256 i = 0; i < assets.length; i++) {
+            _rebalanceAsset(assets[i], totalValue);
+        }
+    }
+
+    function _sellExcess(address _asset, uint256 _totalValue, uint256 _currentAlloc, AssetConfig memory _config) internal {
+        uint256 excessPercentage = _currentAlloc - _config.target;
+        uint256 excessValue = (excessPercentage * _totalValue) / 100;
+        
+        // Calculate slippage-protected minimum
+        uint256 minOut = _getMinOutput(_asset, _config.swapPath, excessValue);
+        
+        if(_asset == address(0)) { // ETH
+            _swapEthForStable(excessValue, minOut, _config.swapPath);
+        } else {
+            _swapTokenForStable(_asset, excessValue, minOut, _config.swapPath);
+        }
+    }
+
+    function _swapEthForStable(uint256 _amount, uint256 _minOut, address[] memory _path) internal {
+        uniswapRouter.swapExactETHForTokens{value: _amount}(
+            _minOut,
+            _path,
+            address(this),
+            block.timestamp + 15 minutes
+        );
+        tokenBalances[address(0)] -= _amount;
+        tokenBalances[_path[_path.length-1]] += _minOut;
+    }
+
+    function _getMinOutput(address _asset, address[] memory _path, uint256 _amount) internal view returns (uint256) {
+        uint256 price = _asset == address(0) ? 
+            getLatestPrice(ethPriceFeed) :
+            getLatestPrice(priceFeeds[_asset]);
+            
+        uint256 expectedOut = (_amount * price) / (10 ** 18); // Price in USD with 18 decimals
+        return (expectedOut * (100 - MAX_SLIPPAGE)) / 100;
+    }
+
+
+
+
+
     //Oracle Functions
     function getAssetValue(address token) public view returns (uint256) {
         
@@ -223,6 +331,10 @@ contract Treasury is ReentrancyGuard {
 
         require(feed != address(0), "Invalid feed address");
         priceFeeds[token] = AggregatorV3Interface(feed);
+    }
+
+    function setAgentKitOperator(address _operator) external onlyOwner {
+        agentKitOperator = _operator;
     }
 
     // Accept ETH deposits
