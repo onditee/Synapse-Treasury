@@ -39,10 +39,12 @@ contract Treasury is ReentrancyGuard {
     mapping(address => address) public aTokenMapping; // Maps underlying tokens to their aToken addresses
     mapping(address => AssetConfig) public assetConfigs;
     
-
+    //Constants
     IAavePool public constant AAVE_POOL = IAavePool(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
     uint256 public constant MAX_AAVE_EXPOSURE = 80; // 80% of treasury
     uint256 public constant MAX_SLIPPAGE = 5; // 5% slippage protection
+    address public constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+    address public constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
 
     // EVENTS
     event FundsDeposited(address indexed token, uint256 amount);
@@ -78,6 +80,7 @@ contract Treasury is ReentrancyGuard {
     }
 
     // CORE FUNCTIONS
+    //will need to update this - only eth is shown
     function getBalance() external view returns (uint256) {
         return address(this).balance;
     }
@@ -252,6 +255,99 @@ contract Treasury is ReentrancyGuard {
         return (expectedOut * (100 - MAX_SLIPPAGE)) / 100;
     }
 
+    function _buyNeeded(
+        address _asset,
+        uint256 _totalValue,
+        uint256 _currentAlloc,
+        AssetConfig memory _config
+        ) internal {
+            
+            uint256 deficitPercentage = _config.target - _currentAlloc;
+            uint256 deficitValue = (deficitPercentage * _totalValue) / 100;
+            
+            // Determine which stablecoin to use for purchase
+            address stablecoin = _findBestStableSource(deficitValue);
+            
+            // Calculate slippage-protected maximum input
+            uint256 maxIn = _getMaxInput(_asset, _config.swapPath, deficitValue);
+            
+            if(_asset == address(0)) {
+                // ETH
+                _swapStableForEth(maxIn, deficitValue, _config.swapPath);
+            } else {
+                _swapStableForToken(_asset, maxIn, deficitValue, stablecoin, _config.swapPath);
+                }
+                
+        }
+
+    function _swapStableForToken(
+        address _targetToken,
+        uint256 _maxStableAmount,
+        uint256 _minTokenAmount,
+        address _stablecoin,
+        address[] memory _path) internal nonReentrant {
+            
+            require(_path[0] == _stablecoin, "Path must start with stablecoin");
+            require(_path[_path.length-1] == _targetToken, "Path must end with target");
+            
+            // Verify stablecoin balance
+            
+            require( tokenBalances[_stablecoin] >= _maxStableAmount,"Insufficient stable balance");
+            
+            // Approve and swap
+            
+            IERC20(_stablecoin).approve(address(uniswapRouter), _maxStableAmount);
+            
+            uniswapRouter.swapTokensForExactTokens(
+                _minTokenAmount,
+                _maxStableAmount,
+                _path,
+                address(this),
+                block.timestamp + 15 minutes
+                );
+                
+            // Update balances
+            
+            tokenBalances[_stablecoin] -= _maxStableAmount;
+            tokenBalances[_targetToken] += _minTokenAmount;
+            
+            emit RebalanceTriggered(_stablecoin, _maxStableAmount, _minTokenAmount);
+            
+        }
+
+    function _findBestStableSource(uint256 _required) internal view returns (address) {
+        
+        // Simplified version I will only prioritize USDC then DAI: I don't have much time lol
+        
+        if(tokenBalances[USDC] >= _required) {
+            
+            return USDC;
+            
+        }
+        
+        if(tokenBalances[DAI] >= _required) {
+            
+            return DAI;
+        
+        }
+        
+        revert("Insufficient stable liquidity");
+    }
+    
+    function _getMaxInput(
+        address _asset,
+        address[] memory _path,
+        uint256 _targetValue
+        ) internal view returns (uint256) {
+            
+            uint256 price = _asset == address(0) ? 
+            getLatestPrice(ethPriceFeed) :
+            getLatestPrice(priceFeeds[_asset]);
+            
+            uint256 expectedIn = (_targetValue * (10 ** 18)) / price; // Convert USD value to token amount
+            
+            return (expectedIn * (100 + MAX_SLIPPAGE)) / 100;
+        }
 
 
 
