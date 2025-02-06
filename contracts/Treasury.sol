@@ -16,6 +16,11 @@ interface IAavePool {
 interface IERC20Metadata {
     function decimals() external view returns (uint8);
 }
+
+interface IWETH {
+    function deposit() external payable;
+    function withdraw(uint) external;
+}
 contract Treasury is ReentrancyGuard {
 
     AggregatorV3Interface internal ethPriceFeed; //= AggregatorV3Interface(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419); // ETH/USD Mainnet
@@ -45,6 +50,7 @@ contract Treasury is ReentrancyGuard {
     uint256 public constant MAX_SLIPPAGE = 5; // 5% slippage protection
     address public constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
     address public constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
+    IWETH public constant WETH = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
 
     // EVENTS
     event FundsDeposited(address indexed token, uint256 amount);
@@ -490,9 +496,10 @@ contract Treasury is ReentrancyGuard {
         agentKitOperator = _operator;
     }
 
-    // Accept ETH deposits
+    // Accept ETH deposits and converting to WETH for consistency 
     receive() external payable {
-        tokenBalances[address(0)] += msg.value;
-        emit FundsDeposited(address(0), msg.value);
+        WETH.deposit{value: msg.value}();
+        tokenBalances[address(WETH)] += msg.value;
+        emit FundsDeposited(address(WETH), msg.value);
     }
 }
