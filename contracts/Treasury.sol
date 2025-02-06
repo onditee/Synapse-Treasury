@@ -76,6 +76,23 @@ contract Treasury is ReentrancyGuard {
         _;
     }
 
+    // Asset configuration management
+    function configureAsset(
+        address _asset,
+        uint256 _target,
+        uint256 _upperThreshold,
+        uint256 _lowerThreshold,
+        address[] calldata _swapPath) external onlyOwner {
+            require(_target + _upperThreshold <= 100, "Invalid thresholds");
+            
+            assetConfigs[_asset] = AssetConfig({
+                target: _target,
+                lowerThreshold: _lowerThreshold,
+                swapPath: _swapPath
+                });
+        emit AllocationConfigured(_asset, _target, _upperThreshold, _lowerThreshold);
+    }
+
     // CONSTRUCTOR
     constructor() {
         owner = msg.sender;
@@ -83,6 +100,14 @@ contract Treasury is ReentrancyGuard {
         //Other price feeds
         priceFeeds[0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48] = AggregatorV3Interface(0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6); // USDC/USD
         priceFeeds[0x6B175474E89094C44Da98b954EedeAC495271d0F] = AggregatorV3Interface(0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9); // DAI/USD
+        
+        //ETH
+        // WETH->USDC
+        //configureAsset(address(0), 30, 5, 5, [address(WETH), 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48]);
+
+        //UNI
+        // UNI->WETH->USDC
+        //configureAsset(0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984, 10, 3, 3, [0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984, address(WETH), 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48]);
     }
 
     // CORE FUNCTIONS
@@ -175,24 +200,6 @@ contract Treasury is ReentrancyGuard {
         address aToken = aTokenMapping[_token];
         return IERC20(aToken).balanceOf(address(this));
         
-    }
-
-    // Asset configuration management
-    function configureAsset(
-        address _asset,
-        uint256 _target,
-        uint256 _upperThreshold,
-        uint256 _lowerThreshold,
-        address[] calldata _swapPath
-    ) external onlyOwner {
-        require(_target + _upperThreshold <= 100, "Invalid thresholds");
-        assetConfigs[_asset] = AssetConfig({
-            target: _target,
-            upperThreshold: _upperThreshold,
-            lowerThreshold: _lowerThreshold,
-            swapPath: _swapPath
-        });
-        emit AllocationConfigured(_asset, _target, _upperThreshold, _lowerThreshold);
     }
 
     // Core rebalancing logic
