@@ -315,6 +315,63 @@ contract Treasury is ReentrancyGuard {
             
         }
 
+    //Swap ERC20 Token -> Stablecoin
+    function _swapTokenForStable(
+        address _token,
+        uint256 _amount,
+        uint256 _minStableAmount,
+        address[] memory _path
+        ) internal nonReentrant {
+            require(_path[0] == _token, "Path must start with token");
+            require( IERC20(_token).balanceOf(address(this)) >= _amount, "Insufficient token balance");
+            
+        // Approve and execute swap
+        IERC20(_token).approve(address(uniswapRouter), _amount);
+        
+        uniswapRouter.swapExactTokensForTokens(
+            _amount,
+            _minStableAmount,
+            _path,
+            address(this),
+            block.timestamp + 15 minutes);
+            
+        // Update balances
+        tokenBalances[_token] -= _amount;
+        address stablecoin = _path[_path.length-1];
+        tokenBalances[stablecoin] += _minStableAmount;
+        
+        emit RebalanceTriggered(_token, _amount, _minStableAmount);
+    }
+    
+    function _swapStableForEth( uint256 _stableAmount, uint256 _minEthAmount, address[] memory _path ) internal nonReentrant {
+        
+        require(_path[_path.length-1] == address(0), "Path must end with ETH");
+        
+        address stablecoin = _path[0];
+        
+        require( tokenBalances[stablecoin] >= _stableAmount, "Insufficient stable balance");
+        
+        // Approve and execute swap
+        
+        IERC20(stablecoin).approve(address(uniswapRouter), _stableAmount);
+        
+        uniswapRouter.swapTokensForExactETH(
+            _minEthAmount,
+            _stableAmount,
+            _path,
+            address(this),
+            block.timestamp + 15 minutes
+            );
+            
+        // Update balances
+        
+        tokenBalances[stablecoin] -= _stableAmount;
+        tokenBalances[address(0)] += _minEthAmount;
+        
+        emit RebalanceTriggered(stablecoin, _stableAmount, _minEthAmount);
+        
+    }
+
     function _findBestStableSource(uint256 _required) internal view returns (address) {
         
         // Simplified version I will only prioritize USDC then DAI: I don't have much time lol
