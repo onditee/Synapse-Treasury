@@ -58,10 +58,11 @@ contract Treasury is ReentrancyGuard {
     event DefiDeposit(address indexed token, uint256 amount);
     event DefiWithdrawal(address indexed token, uint256 amount);
     event YieldEarned(address token, uint256 amount);
-    event RebalanceTriggered(address indexed asset, uint256 amountSold, uint256 amountBought);
+    //event RebalanceTriggered(address indexed asset, uint256 amountSold, uint256 amountBought);
     event AllocationConfigured(address indexed asset, uint256 target, uint256 upper, uint256 lower);
     event RebalanceSuggested(uint256 timestamp, address[] assets, uint256[] allocations);
-
+    event SwapExecuted( address indexed assetSold, address indexed assetBought,uint256 amountSold, uint256 amountBought);
+    event RebalanceCycle(address indexed triggerer,uint256 totalValueBefore, uint256 totalValueAfter, uint256 ethBefore, uint256 ethAfter);
 
     // MODIFIERS
     modifier onlyOwner() {
@@ -221,6 +222,7 @@ contract Treasury is ReentrancyGuard {
     }
 
     function checkAndRebalance() external onlyAgentKit nonReentrant {
+        uint256 totalBefore = getTotalValue();
         uint256 ethBefore = getAssetValue(address(0));
 
         uint256 totalValue = getTotalValue();
@@ -241,7 +243,7 @@ contract Treasury is ReentrancyGuard {
             _rebalanceAsset(tokens[i], totalValue);
         }
         uint256 ethAfter = getAssetValue(address(0));
-        emit RebalanceTriggered(msg.sender, ethBefore, ethAfter);
+        emit RebalanceCycle(msg.sender,totalBefore,getTotalValue(),ethBefore, getAssetValue(address(0)));
     }
 
     function _sellExcess(address _asset, uint256 _totalValue, uint256 _currentAlloc, AssetConfig memory _config) internal {
@@ -333,9 +335,8 @@ contract Treasury is ReentrancyGuard {
             
             tokenBalances[_stablecoin] -= _maxStableAmount;
             tokenBalances[_targetToken] += _minTokenAmount;
-            
-            emit RebalanceTriggered(_stablecoin, _maxStableAmount, _minTokenAmount);
-            
+
+            emit SwapExecuted(_stablecoin,_targetToken,_maxStableAmount,_minTokenAmount);
         }
 
     //Swap ERC20 Token -> Stablecoin
@@ -362,8 +363,8 @@ contract Treasury is ReentrancyGuard {
         tokenBalances[_token] -= _amount;
         address stablecoin = _path[_path.length-1];
         tokenBalances[stablecoin] += _minStableAmount;
-        
-        emit RebalanceTriggered(_token, _amount, _minStableAmount);
+
+        emit SwapExecuted(_token, stablecoin, _amount, _minStableAmount);
     }
     
     function _swapStableForEth( uint256 _stableAmount, uint256 _minEthAmount, address[] memory _path ) internal nonReentrant {
@@ -391,7 +392,7 @@ contract Treasury is ReentrancyGuard {
         tokenBalances[stablecoin] -= _stableAmount;
         tokenBalances[address(0)] += _minEthAmount;
         
-        emit RebalanceTriggered(stablecoin, _stableAmount, _minEthAmount);
+        emit SwapExecuted(stablecoin, address(0), _stableAmount, _minEthAmount);
         
     }
 
