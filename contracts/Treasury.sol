@@ -9,7 +9,17 @@ import "c:/Users/Ted/node_modules/@uniswap/v2-periphery/contracts/interfaces/IUn
 interface IAavePool {
     function deposit(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external;
     function withdraw(address asset, uint256 amount, address to) external;
-    function getReserveData(address asset) external view returns (uint256, address);
+    struct ReserveData{
+        uint256 configuration; 
+        uint128 liquidityIndex;
+        uint128 currentLiquidityRate;
+        uint128 variableBorrowIndex;
+        uint128 currentVariableBorrowRate;
+        uint128 currentStableBorrowRate;
+        uint40 lastUpdateTimestamp;
+        address aTokenAddress;
+    }
+    function getReserveData(address asset) external view returns (ReserveData memory);
 }
 
 //Interface for Erc20 metadata
@@ -58,7 +68,6 @@ contract Treasury is ReentrancyGuard {
     event DefiDeposit(address indexed token, uint256 amount);
     event DefiWithdrawal(address indexed token, uint256 amount);
     event YieldEarned(address token, uint256 amount);
-    //event RebalanceTriggered(address indexed asset, uint256 amountSold, uint256 amountBought);
     event AllocationConfigured(address indexed asset, uint256 target, uint256 upper, uint256 lower);
     event RebalanceSuggested(uint256 timestamp, address[] assets, uint256[] allocations);
     event SwapExecuted( address indexed assetSold, address indexed assetBought,uint256 amountSold, uint256 amountBought);
@@ -155,9 +164,9 @@ contract Treasury is ReentrancyGuard {
         tokenBalances[_token] -= _amount;
         
         // Get aToken address if not already mapped
-        if (aTokenMapping[_token] == address(0)) {
-            (, address aToken) = AAVE_POOL.getReserveData(_token);
-            aTokenMapping[_token] = aToken;
+        if (aTokenMapping[_token] == address(0)) { 
+            IAavePool.ReserveData memory reserveData = AAVE_POOL.getReserveData(_token);
+            address aToken = reserveData.aTokenAddress;
         }
         IERC20(_token).approve(address(AAVE_POOL), _amount);
         AAVE_POOL.deposit(_token, _amount, address(this), 0);
@@ -448,7 +457,13 @@ contract Treasury is ReentrancyGuard {
 
     //Oracle Functions
     function getAssetValue(address token) public view returns (uint256) {
+        uint256 balance = tokenBalances[token];
         
+        if (aTokenMapping[token] != address(0)) {
+            
+            balance += IERC20(aTokenMapping[token]).balanceOf(address(this));
+            }
+
         if(token == address(0)) { // ETH
             uint256 ethPrice = getLatestPrice(ethPriceFeed);
             return (tokenBalances[token] * ethPrice) / (10 ** ethPriceFeed.decimals());
