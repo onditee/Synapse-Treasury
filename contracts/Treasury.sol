@@ -62,6 +62,7 @@ contract Treasury is ReentrancyGuard {
     event AllocationConfigured(address indexed asset, uint256 target, uint256 upper, uint256 lower);
     event RebalanceSuggested(uint256 timestamp, address[] assets, uint256[] allocations);
 
+
     // MODIFIERS
     modifier onlyOwner() {
         require(msg.sender == owner, "Unauthorized");
@@ -220,6 +221,8 @@ contract Treasury is ReentrancyGuard {
     }
 
     function checkAndRebalance() external onlyAgentKit nonReentrant {
+        uint256 ethBefore = getAssetValue(address(0));
+
         uint256 totalValue = getTotalValue();
         require(totalValue > 0, "No assets to rebalance");
         
@@ -237,6 +240,8 @@ contract Treasury is ReentrancyGuard {
         for(uint256 i = 0; i < tokens.length; i++) {
             _rebalanceAsset(tokens[i], totalValue);
         }
+        uint256 ethAfter = getAssetValue(address(0));
+        emit RebalanceTriggered(msg.sender, ethBefore, ethAfter);
     }
 
     function _sellExcess(address _asset, uint256 _totalValue, uint256 _currentAlloc, AssetConfig memory _config) internal {
@@ -479,6 +484,18 @@ contract Treasury is ReentrancyGuard {
         uint256 totalValue = getTotalValue();
         return (ethValue * 100) / totalValue;
     }
+
+    function getAllocations() external view returns (
+        uint256 ethAllocation,
+        uint256 usdcAllocation,
+        uint256 daiAllocation,
+        uint256 totalValue) {
+            totalValue = getTotalValue();
+            ethAllocation = (getAssetValue(address(0)) * 100) / totalValue;
+            usdcAllocation = (getAssetValue(USDC) * 100) / totalValue;
+            daiAllocation = (getAssetValue(DAI) * 100) / totalValue;
+            
+        }
 
 
     function getLatestPrice(AggregatorV3Interface priceFeed) internal view returns (uint256) {
