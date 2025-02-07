@@ -56,7 +56,7 @@ contract Treasury is ReentrancyGuard {
     
     //Constants
     IAavePool public constant AAVE_POOL = IAavePool(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
-    uint256 public constant MAX_AAVE_EXPOSURE = 80; // 80% of treasury
+    uint256 public constant MAX_AAVE_EXPOSURE = 8000; // 80% of treasury
     uint256 public constant MAX_SLIPPAGE = 5; // 5% slippage protection
     address public constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
     address public constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
@@ -71,7 +71,7 @@ contract Treasury is ReentrancyGuard {
     event AllocationConfigured(address indexed asset, uint256 target, uint256 upper, uint256 lower);
     event RebalanceSuggested(uint256 timestamp, address[] assets, uint256[] allocations);
     event SwapExecuted( address indexed assetSold, address indexed assetBought,uint256 amountSold, uint256 amountBought);
-    event RebalanceCycle(address indexed triggerer,uint256 totalValueBefore, uint256 totalValueAfter, uint256 ethBefore, uint256 ethAfter);
+    event RebalanceCycle(address indexed triggerer,uint256 totalValueBefore, uint256 totalValueAfter, uint256 wethBefore, uint256 wethAfter);
 
     // MODIFIERS
     modifier onlyOwner() {
@@ -109,15 +109,19 @@ contract Treasury is ReentrancyGuard {
     // CONSTRUCTOR
     constructor() {
         owner = msg.sender;
-        ethPriceFeed = AggregatorV3Interface(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419);
+        //Weth
+        priceFeeds[address(WETH)] = AggregatorV3Interface(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419);
         //Other price feeds
         priceFeeds[0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48] = AggregatorV3Interface(0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6); // USDC/USD
         priceFeeds[0x6B175474E89094C44Da98b954EedeAC495271d0F] = AggregatorV3Interface(0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9); // DAI/USD
-        
-        //ETH
-        // WETH->USDC
-        //configureAsset(address(0), 30, 5, 5, [address(WETH), 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48]);
+        priceFeeds[address(WETH)] = ethPriceFeed;
 
+        address[] memory wethPath = new address[](2);
+        wethPath[0] = address(WETH);
+        wethPath[1] = USDC;
+        
+        //configureAsset(address(WETH), 3000, 500, 500, wethPath); // 30% target allocation
+       
         //UNI
         // UNI->WETH->USDC
         //configureAsset(0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984, 10, 3, 3, [0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984, address(WETH), 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48]);
@@ -134,12 +138,7 @@ contract Treasury is ReentrancyGuard {
         uint256 _amount,
         address _token
     ) external onlyProposals nonReentrant {
-        if (_token == address(0)) {
-            (bool sent, ) = _to.call{value: _amount}("");
-            require(sent, "ETH transfer failed");
-        } else {
-            require(IERC20(_token).transfer(_to, _amount), "Token transfer failed");
-        }
+        require(IERC20(_token).transfer(_to, _amount), "Token transfer failed");
         tokenBalances[_token] -= _amount;
     }
 
@@ -232,13 +231,13 @@ contract Treasury is ReentrancyGuard {
 
     function checkAndRebalance() external onlyAgentKit nonReentrant {
         uint256 totalBefore = getTotalValue();
-        uint256 ethBefore = getAssetValue(address(0));
+        uint256 wethBefore = getAssetValue(address(WETH));
 
         uint256 totalValue = getTotalValue();
         require(totalValue > 0, "No assets to rebalance");
         
-        // Check ETH allocation first
-        _rebalanceAsset(address(0), totalValue);
+        // Check WETH allocation first
+        _rebalanceAsset(address(WETH), totalValue);
         
         // Check configured assets
         address[] memory tokens = new address[](4);
@@ -251,8 +250,7 @@ contract Treasury is ReentrancyGuard {
         for(uint256 i = 0; i < tokens.length; i++) {
             _rebalanceAsset(tokens[i], totalValue);
         }
-        uint256 ethAfter = getAssetValue(address(0));
-        emit RebalanceCycle(msg.sender,totalBefore,getTotalValue(),ethBefore, getAssetValue(address(0)));
+        emit RebalanceCycle(msg.sender,totalBefore,getTotalValue(),wethBefore, getAssetValue(address(WETH)));
     }
 
     function _sellExcess(address _asset, uint256 _totalValue, uint256 _currentAlloc, AssetConfig memory _config) internal {
@@ -262,31 +260,17 @@ contract Treasury is ReentrancyGuard {
         // Calculate slippage-protected minimum
         uint256 minOut = _getMinOutput(_asset, _config.swapPath, excessValue);
         
-        if(_asset == address(0)) { // ETH
-            _swapEthForStable(excessValue, minOut, _config.swapPath);
-        } else {
-            _swapTokenForStable(_asset, excessValue, minOut, _config.swapPath);
-        }
+        _swapTokenForStable(_asset, excessValue, minOut, _config.swapPath);
     }
 
-    function _swapEthForStable(uint256 _amount, uint256 _minOut, address[] memory _path) internal {
-        uniswapRouter.swapExactETHForTokens{value: _amount}(
-            _minOut,
-            _path,
-            address(this),
-            block.timestamp + 15 minutes
-        );
-        tokenBalances[address(0)] -= _amount;
-        tokenBalances[_path[_path.length-1]] += _minOut;
-    }
-
-    function _getMinOutput(address _asset, address[] memory _path, uint256 _amount) internal view returns (uint256) {
-        uint256 price = _asset == address(0) ? 
-            getLatestPrice(ethPriceFeed) :
-            getLatestPrice(priceFeeds[_asset]);
-            
-        uint256 expectedOut = (_amount * price) / (10 ** 18); // Price in USD with 18 decimals
+   function _getMinOutput(address _asset, address[] memory _path, uint256 _amount) internal view returns (uint256) {
+        uint8 tokenDecimals = IERC20Metadata(_asset).decimals();
+        uint8 feedDecimals = ethPriceFeed.decimals();
+        uint256 price = getLatestPrice(ethPriceFeed);
+        uint256 expectedOut = (_amount * price) / (10 ** tokenDecimals);
+        expectedOut = (expectedOut * (10 ** IERC20Metadata(_path[_path.length-1]).decimals())) / (10 ** feedDecimals);
         return (expectedOut * (100 - MAX_SLIPPAGE)) / 100;
+        
     }
 
     function _buyNeeded(
@@ -305,12 +289,7 @@ contract Treasury is ReentrancyGuard {
             // Calculate slippage-protected maximum input
             uint256 maxIn = _getMaxInput(_asset, _config.swapPath, deficitValue);
             
-            if(_asset == address(0)) {
-                // ETH
-                _swapStableForEth(maxIn, deficitValue, _config.swapPath);
-            } else {
-                _swapStableForToken(_asset, maxIn, deficitValue, stablecoin, _config.swapPath);
-                }
+            _swapStableForToken(_asset, maxIn, deficitValue, stablecoin, _config.swapPath);
                 
         }
 
@@ -356,6 +335,7 @@ contract Treasury is ReentrancyGuard {
         address[] memory _path
         ) internal nonReentrant {
             require(_path[0] == _token, "Path must start with token");
+            //require(_token == address(WETH) || _token == otherTokens, "Invalid token");
             require( IERC20(_token).balanceOf(address(this)) >= _amount, "Insufficient token balance");
             
         // Approve and execute swap
@@ -374,35 +354,6 @@ contract Treasury is ReentrancyGuard {
         tokenBalances[stablecoin] += _minStableAmount;
 
         emit SwapExecuted(_token, stablecoin, _amount, _minStableAmount);
-    }
-    
-    function _swapStableForEth( uint256 _stableAmount, uint256 _minEthAmount, address[] memory _path ) internal nonReentrant {
-        
-        require(_path[_path.length-1] == address(0), "Path must end with ETH");
-        
-        address stablecoin = _path[0];
-        
-        require( tokenBalances[stablecoin] >= _stableAmount, "Insufficient stable balance");
-        
-        // Approve and execute swap
-        
-        IERC20(stablecoin).approve(address(uniswapRouter), _stableAmount);
-        
-        uniswapRouter.swapTokensForExactETH(
-            _minEthAmount,
-            _stableAmount,
-            _path,
-            address(this),
-            block.timestamp + 15 minutes
-            );
-            
-        // Update balances
-        
-        tokenBalances[stablecoin] -= _stableAmount;
-        tokenBalances[address(0)] += _minEthAmount;
-        
-        emit SwapExecuted(stablecoin, address(0), _stableAmount, _minEthAmount);
-        
     }
 
     function _findBestStableSource(uint256 _required) internal view returns (address) {
@@ -447,7 +398,7 @@ contract Treasury is ReentrancyGuard {
         allocations[2] = (getAssetValue(DAI) * 100) / getTotalValue();
         
         address[] memory assets = new address[](3);
-        assets[0] = address(0);
+        assets[0] = address(WETH);
         assets[1] = USDC;
         assets[2] = DAI;
         
@@ -459,18 +410,18 @@ contract Treasury is ReentrancyGuard {
     function getAssetValue(address token) public view returns (uint256) {
         uint256 balance = tokenBalances[token];
         
-        if (aTokenMapping[token] != address(0)) {
+        if (aTokenMapping[token] != address(WETH)) {
             
             balance += IERC20(aTokenMapping[token]).balanceOf(address(this));
             }
 
-        if(token == address(0)) { // ETH
-            uint256 ethPrice = getLatestPrice(ethPriceFeed);
-            return (tokenBalances[token] * ethPrice) / (10 ** ethPriceFeed.decimals());
+        if(token == address(WETH)) { // WETH
+            uint256 wethPrice = getLatestPrice(priceFeeds[address(WETH)]);
+            return (tokenBalances[token] * wethPrice) / (10 ** 18);
         }
 
         AggregatorV3Interface feed = priceFeeds[token];
-        require(address(feed) != address(0), "Price feed not found");
+        require(address(feed) != address(WETH), "Price feed not found");
         
         uint256 tokenPrice = getLatestPrice(feed);
         uint256 tokenDecimals = 10 ** IERC20Metadata(token).decimals();
@@ -480,7 +431,7 @@ contract Treasury is ReentrancyGuard {
 
     function getTotalValue() public view returns (uint256) {
         
-        uint256 total = getAssetValue(address(0)); // ETH value
+        uint256 total = getAssetValue(address(WETH)); // WETH value
         
         //Stablecoin values
         address[] memory stablecoins = new address[](2);
@@ -496,18 +447,18 @@ contract Treasury is ReentrancyGuard {
 
     function getEthAllocation() public view returns (uint256) {
         
-        uint256 ethValue = getAssetValue(address(0));
+        uint256 wethValue = getAssetValue(address(WETH));
         uint256 totalValue = getTotalValue();
-        return (ethValue * 100) / totalValue;
+        return (wethValue * 100) / totalValue;
     }
 
     function getAllocations() external view returns (
-        uint256 ethAllocation,
+        uint256 wethAllocation,
         uint256 usdcAllocation,
         uint256 daiAllocation,
         uint256 totalValue) {
             totalValue = getTotalValue();
-            ethAllocation = (getAssetValue(address(0)) * 100) / totalValue;
+            wethAllocation = (getAssetValue(address(WETH)) * 100) / totalValue;
             usdcAllocation = (getAssetValue(USDC) * 100) / totalValue;
             daiAllocation = (getAssetValue(DAI) * 100) / totalValue;
             
@@ -538,7 +489,7 @@ contract Treasury is ReentrancyGuard {
         address _token,
         uint256 _amount
     ) external onlyOwner {
-        if (_token == address(0)) {
+        if (_token == address(WETH)) {
             payable(owner).transfer(_amount);
         } else {
             IERC20(_token).transfer(owner, _amount);
@@ -546,7 +497,7 @@ contract Treasury is ReentrancyGuard {
     }
     function updatePriceFeed(address token, address feed) external onlyOwner {
 
-        require(feed != address(0), "Invalid feed address");
+        require(feed != address(WETH), "Invalid feed address");
         priceFeeds[token] = AggregatorV3Interface(feed);
     }
 
@@ -561,3 +512,48 @@ contract Treasury is ReentrancyGuard {
         emit FundsDeposited(address(WETH), msg.value);
     }
 }
+
+//Archive
+/***
+
+  function _swapEthForStable(uint256 _amount, uint256 _minOut, address[] memory _path) internal {
+        uniswapRouter.swapExactETHForTokens{value: _amount}(
+            _minOut,
+            _path,
+            address(this),
+            block.timestamp + 15 minutes
+        );
+        tokenBalances[address(0)] -= _amount;
+        tokenBalances[_path[_path.length-1]] += _minOut;
+    }
+
+        function _swapStableForEth( uint256 _stableAmount, uint256 _minEthAmount, address[] memory _path ) internal nonReentrant {
+        
+        require(_path[_path.length-1] == address(0), "Path must end with ETH");
+        
+        address stablecoin = _path[0];
+        
+        require( tokenBalances[stablecoin] >= _stableAmount, "Insufficient stable balance");
+        
+        // Approve and execute swap
+        
+        IERC20(stablecoin).approve(address(uniswapRouter), _stableAmount);
+        
+        uniswapRouter.swapTokensForExactETH(
+            _minEthAmount,
+            _stableAmount,
+            _path,
+            address(this),
+            block.timestamp + 15 minutes
+            );
+            
+        // Update balances
+        
+        tokenBalances[stablecoin] -= _stableAmount;
+        tokenBalances[address(0)] += _minEthAmount;
+        
+        emit SwapExecuted(stablecoin, address(0), _stableAmount, _minEthAmount);
+        
+    }
+
+ */
