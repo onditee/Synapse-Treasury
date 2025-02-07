@@ -60,6 +60,7 @@ contract Treasury is ReentrancyGuard {
     event YieldEarned(address token, uint256 amount);
     event RebalanceTriggered(address indexed asset, uint256 amountSold, uint256 amountBought);
     event AllocationConfigured(address indexed asset, uint256 target, uint256 upper, uint256 lower);
+    event RebalanceSuggested(uint256 timestamp, address[] assets, uint256[] allocations);
 
     // MODIFIERS
     modifier onlyOwner() {
@@ -87,6 +88,7 @@ contract Treasury is ReentrancyGuard {
             
             assetConfigs[_asset] = AssetConfig({
                 target: _target,
+                upperThreshold: _upperThreshold,
                 lowerThreshold: _lowerThreshold,
                 swapPath: _swapPath
                 });
@@ -225,12 +227,15 @@ contract Treasury is ReentrancyGuard {
         _rebalanceAsset(address(0), totalValue);
         
         // Check configured assets
-        address[] memory assets = new address[](2);
-        assets[0] = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // USDC
-        assets[1] = 0x6B175474E89094C44Da98b954EedeAC495271d0F; // DAI
+        address[] memory tokens = new address[](4);
+        tokens[0] = address(WETH);
+        tokens[1] = USDC;
+        tokens[2] = DAI;
+        tokens[3] = 0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984; // UNI
+
         
-        for(uint256 i = 0; i < assets.length; i++) {
-            _rebalanceAsset(assets[i], totalValue);
+        for(uint256 i = 0; i < tokens.length; i++) {
+            _rebalanceAsset(tokens[i], totalValue);
         }
     }
 
@@ -419,8 +424,21 @@ contract Treasury is ReentrancyGuard {
             return (expectedIn * (100 + MAX_SLIPPAGE)) / 100;
         }
 
-
-
+    function suggestRebalance() external onlyAgentKit {
+        
+        uint256[] memory allocations = new uint256[](3);
+        allocations[0] = getEthAllocation();
+        allocations[1] = (getAssetValue(USDC) * 100) / getTotalValue();
+        allocations[2] = (getAssetValue(DAI) * 100) / getTotalValue();
+        
+        address[] memory assets = new address[](3);
+        assets[0] = address(0);
+        assets[1] = USDC;
+        assets[2] = DAI;
+        
+        emit RebalanceSuggested(block.timestamp, assets, allocations);
+        
+    }
 
     //Oracle Functions
     function getAssetValue(address token) public view returns (uint256) {
