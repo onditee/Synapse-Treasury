@@ -95,7 +95,7 @@ contract Treasury is ReentrancyGuard {
         uint256 _upperThreshold,
         uint256 _lowerThreshold,
         address[] calldata _swapPath) external onlyOwner {
-            require(_target + _upperThreshold <= 100, "Invalid thresholds");
+            require(_target + _upperThreshold <= 10000, "Invalid thresholds");
             
             assetConfigs[_asset] = AssetConfig({
                 target: _target,
@@ -156,7 +156,7 @@ contract Treasury is ReentrancyGuard {
         );
 
         //Check to make sure we are not exceeding Max aave exposure
-        uint256 maxDeposit = (getTotalValue() * MAX_AAVE_EXPOSURE) / 100;
+        uint256 maxDeposit = (getTotalValue() * MAX_AAVE_EXPOSURE) / 10000;
         
         require(_amount <= maxDeposit, "Exceeds Aave cap");
 
@@ -257,7 +257,7 @@ contract Treasury is ReentrancyGuard {
 
     function _sellExcess(address _asset, uint256 _totalValue, uint256 _currentAlloc, AssetConfig memory _config) internal {
         uint256 excessPercentage = _currentAlloc - _config.target;
-        uint256 excessValue = (excessPercentage * _totalValue) / 100;
+        uint256 excessValue = (excessPercentage * _totalValue) / 10000;
         
         // Calculate slippage-protected minimum
         uint256 minOut = _getMinOutput(_asset, _config.swapPath, excessValue);
