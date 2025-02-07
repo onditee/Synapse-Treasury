@@ -1,0 +1,9 @@
+{
+    "rpcUrl": "https://mainnet.infura.io/v3/Need_KEY",
+    "treasuryAddress": "0x...",
+    "checkInterval": 90,
+    "thresholds": {
+      "ETH": {"min": 35, "max": 45},
+      "USDC": {"min": 48, "max": 52}
+    }
+  }
