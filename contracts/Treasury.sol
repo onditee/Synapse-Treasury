@@ -190,8 +190,11 @@ contract Treasury is ReentrancyGuard {
 
         //Yeild calculation
         uint256 principal = aavePrincipal[_token];
-
-        uint256 yield = (currentATokenBalance * _amount) / principal - _amount;
+        // Calculate yield only if current balance exceeds principal
+        uint256 yield = 0;
+        if (currentATokenBalance > principal) {
+            yield = (currentATokenBalance * _amount) / principal - _amount;
+        }
 
         AAVE_POOL.withdraw(_token, _amount, address(this));
         
@@ -311,21 +314,22 @@ contract Treasury is ReentrancyGuard {
             // Approve and swap
             
             IERC20(_stablecoin).approve(address(uniswapRouter), _maxStableAmount);
-            
-            uniswapRouter.swapTokensForExactTokens(
+            uint256 stableBalanceBefore = IERC20(_stablecoin).balanceOf(address(this));
+            uint[] memory amounts = uniswapRouter.swapTokensForExactTokens(
                 _minTokenAmount,
                 _maxStableAmount,
                 _path,
                 address(this),
                 block.timestamp + 15 minutes
                 );
-                
+
+            uint256 stableSpent = stableBalanceBefore - IERC20(_stablecoin).balanceOf(address(this));  
             // Update balances
             
-            tokenBalances[_stablecoin] -= _maxStableAmount;
-            tokenBalances[_targetToken] += _minTokenAmount;
+            tokenBalances[_stablecoin] -= stableSpent;
+            tokenBalances[_targetToken] += amounts[amounts.length - 1];
 
-            emit SwapExecuted(_stablecoin,_targetToken,_maxStableAmount,_minTokenAmount);
+            emit SwapExecuted(_stablecoin, _targetToken, stableSpent, amounts[amounts.length - 1]);
         }
 
     //Swap ERC20 Token -> Stablecoin
@@ -410,7 +414,7 @@ contract Treasury is ReentrancyGuard {
     function getAssetValue(address token) public view returns (uint256) {
         uint256 balance = tokenBalances[token];
         
-        if (aTokenMapping[token] != address(WETH)) {
+        if (aTokenMapping[token] != address(0)) {
             
             balance += IERC20(aTokenMapping[token]).balanceOf(address(this));
             }

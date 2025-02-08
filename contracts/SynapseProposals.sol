@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "c:/Users/Ted/node_modules/@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 interface ITreasury {
     function getBalance() external view returns (uint256);
-    function executeTransfer(address recipient, uint256 amount) external;
+    function executeTransfer(address recipient, uint256 amount, address token) external;
     function depositToAave(address token,uint256 amount) external;
 }
 
@@ -26,7 +26,7 @@ contract SynapseProposals is ReentrancyGuard {
         bool executed;
         bool isAgentProposal;
         string metadataCID; // IPFS CID for proposal metadata
-        address recipent;
+        address recipient;
         address token;
     }
 
@@ -123,7 +123,8 @@ contract SynapseProposals is ReentrancyGuard {
         uint256 _amount,
         bool _isAgentProposal,
         string memory _metadataCID,
-        address _recipient
+        address _recipient,
+        address _token
     ) public returns (uint256) {
         //Check if proposer is authorized
         require(
@@ -135,6 +136,11 @@ contract SynapseProposals is ReentrancyGuard {
             require(authorizedAgents[msg.sender], "Agent not authorized");
         } else {
             require(authorizedProposers[msg.sender], "Proposer not authorized");
+        }
+
+        // For DEFI proposals, require a token to be specified
+        if (_type == ProposalType.DEFI_DEPOSIT || _type == ProposalType.DEFI_WITHDRAW) {
+            require(_token != address(0), "Token must be provided for DEFI proposals");
         }
 
         // Validate amount
@@ -152,7 +158,8 @@ contract SynapseProposals is ReentrancyGuard {
         newProposal.deadline = block.timestamp + VOTE_DURATION;
         newProposal.isAgentProposal = _isAgentProposal;
         newProposal.metadataCID = _metadataCID;
-        newProposal.recipent = _recipient;
+        newProposal.recipient = _recipient;
+        newProposal.token = _token;
 
         emit ProposalCreated(
             proposalCount,
@@ -182,10 +189,13 @@ contract SynapseProposals is ReentrancyGuard {
         // Record vote
         hasVoted[_proposalId][msg.sender] = true;
         
-        if(_vote == VoteOption.YES) proposal.yesVotes+= power;
-        else if(_vote == VoteOption.NO) proposal.noVotes+= power;
-        else proposal.abstainVotes+= power; //I'll fix this during testing not necessary
-
+        if(_vote == VoteOption.YES){
+            proposal.yesVotes+= power;
+        } else if(_vote == VoteOption.NO) {
+            proposal.noVotes+= power;
+        } else {
+            proposal.abstainVotes+= power; //I'll fix this during testing not necessary
+        }
         emit Voted(_proposalId, msg.sender, _vote, _isAgentVote, power);
     }
 
@@ -217,11 +227,10 @@ contract SynapseProposals is ReentrancyGuard {
 
         proposal.executed = true;
         // Execute fund transfer
-        address recipientAddress = proposal.recipent;
-        treasury.executeTransfer(recipientAddress, proposal.amount);
+        treasury.executeTransfer(proposal.recipient, proposal.amount,proposal.token);
 
         // Emit event for proposal execution
-        emit ProposalExecuted(_proposalId, msg.sender, proposal.amount, proposal.recipent);
+        emit ProposalExecuted(_proposalId, msg.sender, proposal.amount, proposal.recipient);
         
     }
 
@@ -230,9 +239,10 @@ contract SynapseProposals is ReentrancyGuard {
         ProposalType _type,
         uint256 _amount,
         string memory _metadataCID,
-        address _recipient
+        address _recipient,
+        address _token
     ) external onlyAgent returns (uint256) {
-        return createProposal(_type, _amount, true, _metadataCID,_recipient);
+        return createProposal(_type, _amount, true, _metadataCID,_recipient,_token);
     }
 
     function agentVote(uint256 _proposalId, VoteOption _vote) external onlyAgent {
@@ -240,16 +250,6 @@ contract SynapseProposals is ReentrancyGuard {
     }
 
     //ADMIN FUNCTIONS 
-    //****Duplicate fn remove once done*/
-    function addProposer(address _proposer) external onlyOwner {
-        authorizedProposers[_proposer] = true;
-    }
-
-    //****Duplicate fn */
-    function addAgent(address _agent) external onlyOwner {
-        authorizedAgents[_agent] = true;
-    }
-
     function updateTreasury(address _newTreasury) external onlyOwner {
         treasury = ITreasury(_newTreasury);
     }
@@ -270,3 +270,15 @@ contract SynapseProposals is ReentrancyGuard {
         votingPower[_address] = 0;
         }
 }
+
+//****Duplicate fns remove once done*/ aRCHIVE
+/***
+    function addProposer(address _proposer) external onlyOwner {
+        authorizedProposers[_proposer] = true;
+    }
+
+    function addAgent(address _agent) external onlyOwner {
+        authorizedAgents[_agent] = true;
+    }
+
+ */
