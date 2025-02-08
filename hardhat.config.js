@@ -15,7 +15,7 @@ module.exports = {
   networks: {
     sepolia: {
       url: process.env.SEPOLIA_RPC_URL || "https://rpc.sepolia.dev",
-      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      accounts: [process.env.PRIVATE_KEY].filter(Boolean),
       chainId: 11155111,
     },
   },
