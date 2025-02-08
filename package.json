@@ -641,6 +641,7 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "mocha": "^10.8.2"
   },
   "scripts": {
