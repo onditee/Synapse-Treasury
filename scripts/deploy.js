@@ -3,14 +3,6 @@ const { ethers } = require("hardhat");
 require("dotenv").config();
 
 async function main() {
-  // Sepolia Testnet Addresses
-  const SEPOLIA_ADDRESSES = {
-    AAVE_POOL: "0x368EedF3f56ad10b9bC57eed4Dac65B26Bb667f6",
-    USDC: "0xEbCC972B6B3eB15C0592BE1871838963d0B94278",
-    DAI: "0xe5118E47e061ab15Ca972D045b35193F673bcc36",
-    WETH: "0xA1A245cc76414DC143687D9c3DE1152396f352D6"
-  };
-
   // Get deployer account
   const [deployer] = await ethers.getSigners();
   console.log("Deploying contracts with account:", deployer.address);
