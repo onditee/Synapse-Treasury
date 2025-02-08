@@ -109,14 +109,15 @@ contract Treasury is ReentrancyGuard {
     constructor() {
         owner = msg.sender;
         //Weth
-        priceFeeds[address(WETH)] = AggregatorV3Interface(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419);
+        priceFeeds[address(WETH)] = AggregatorV3Interface(0x694AA1769357215DE4FAC081bf1f309aDC325306);
         //Other price feeds
-        priceFeeds[0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48] = AggregatorV3Interface(0xA2F78ab235B91eb3Dfc231107A4dD29eA5e1eB46); // USDC/USD
-        priceFeeds[0x6B175474E89094C44Da98b954EedeAC495271d0F] = AggregatorV3Interface(0x14866185B1962B0a130951C385e7f9a9e2516D91); // DAI/USD
+        priceFeeds[0xEbCC972B6B3eB15C0592BE1871838963d0B94278] = AggregatorV3Interface(0xA2F78ab2355fe2f984D808B5CeE7FD0A93D5270E); // USDC/USD
+        priceFeeds[0xe5118E47e061ab15Ca972D045b35193F673bcc36] = AggregatorV3Interface(0x14866185B1962B63C3Ea9E03Bc1da838bab34C19); // DAI/USD
 
         address[] memory wethPath = new address[](2);
         wethPath[0] = address(WETH);
         wethPath[1] = USDC;
+        wethPath[2] = DAI;
         
         //configureAsset(address(WETH), 3000, 500, 500, wethPath); // 30% target allocation
        
@@ -438,8 +439,8 @@ contract Treasury is ReentrancyGuard {
         
         //Stablecoin values
         address[] memory stablecoins = new address[](2);
-        stablecoins[0] = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // USDC
-        stablecoins[1] = 0x6B175474E89094C44Da98b954EedeAC495271d0F; // DAI
+        stablecoins[0] = USDC;
+        stablecoins[1] = DAI;
         
         for(uint256 i = 0; i < stablecoins.length; i++) {
             total += getAssetValue(stablecoins[i]);
