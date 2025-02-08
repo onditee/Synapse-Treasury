@@ -1,4 +1,4 @@
-import { AgentKit } from '@agentkit/core';
+import { AgentKit } from '@coinbase/agentkit';
 import { ethers } from 'ethers';
 import TreasuryABI from './TreasuryABI.json';
 import config from './agent-config.json';

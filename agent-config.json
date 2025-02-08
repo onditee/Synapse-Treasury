@@ -1,5 +1,5 @@
 {
-    "rpcUrl": "https://mainnet.infura.io/v3/Need_KEY",
+    "rpcUrl": "https://sepolia.infura.io/v3/472771597b79491fa4663749cc509da7",
     "treasuryAddress": "0x...",
     "checkInterval": 90,
     "thresholds": {
