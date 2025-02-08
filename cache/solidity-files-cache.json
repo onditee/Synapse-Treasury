@@ -93,8 +93,8 @@
       ]
     },
     "C:\\Users\\Ted\\Desktop\\CECS 105\\Synapse-Treasury\\contracts\\Treasury.sol": {
-      "lastModificationDate": 1738994337393,
-      "contentHash": "84e63f44da9bbd699d780c08768d563e",
+      "lastModificationDate": 1739049923484,
+      "contentHash": "8e561162ddcad22a454a7e9e63ca144f",
       "sourceName": "contracts/Treasury.sol",
       "solcConfig": {
         "version": "0.8.20",
