@@ -39,6 +39,8 @@ contract Treasury is ReentrancyGuard {
     address public proposalsContract;
     IUniswapV2Router02 public uniswapRouter = IUniswapV2Router02(0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008);
     address public agentKitOperator;
+    address[] public aaveAssets;
+    mapping(address => bool) public isAaveAsset;
 
     struct AssetConfig {
         uint256 target;         // Target allocation percentage (100 = 1%)
@@ -114,7 +116,7 @@ contract Treasury is ReentrancyGuard {
         priceFeeds[0xEbCC972B6B3eB15C0592BE1871838963d0B94278] = AggregatorV3Interface(0xA2F78ab2355fe2f984D808B5CeE7FD0A93D5270E); // USDC/USD
         priceFeeds[0xe5118E47e061ab15Ca972D045b35193F673bcc36] = AggregatorV3Interface(0x14866185B1962B63C3Ea9E03Bc1da838bab34C19); // DAI/USD
 
-        address[] memory wethPath = new address[](2);
+        address[] memory wethPath = new address[](3);
         wethPath[0] = address(WETH);
         wethPath[1] = USDC;
         wethPath[2] = DAI;
@@ -137,6 +139,7 @@ contract Treasury is ReentrancyGuard {
         uint256 _amount,
         address _token
     ) external onlyProposals nonReentrant {
+        require(tokenBalances[_token] >= _amount, "Insufficient liquid balance");
         require(IERC20(_token).transfer(_to, _amount), "Token transfer failed");
         tokenBalances[_token] -= _amount;
     }
@@ -154,9 +157,11 @@ contract Treasury is ReentrancyGuard {
         );
 
         //Check to make sure we are not exceeding Max aave exposure
-        uint256 maxDeposit = (getTotalValue() * MAX_AAVE_EXPOSURE) / 10000;
+        uint256 totalValue = getTotalValue();
+        uint256 maxAllowed = (totalValue * MAX_AAVE_EXPOSURE) / 10000;
+        uint256 currentExposure = getAaveTotalValue();
         
-        require(_amount <= maxDeposit, "Exceeds Aave cap");
+        require(currentExposure + _amount <= maxAllowed, "Exceeds Aave cap");
 
         // Update token balance before transfer to Aave
         tokenBalances[_token] -= _amount;
@@ -166,10 +171,14 @@ contract Treasury is ReentrancyGuard {
             IAavePool.ReserveData memory reserveData = AAVE_POOL.getReserveData(_token);
             address aToken = reserveData.aTokenAddress;
             aTokenMapping[_token] = aToken;
+
+            if (!isAaveAsset[_token]) {
+                aaveAssets.push(_token);
+                isAaveAsset[_token] = true;
+            }
         }
         IERC20(_token).approve(address(AAVE_POOL), _amount);
         AAVE_POOL.deposit(_token, _amount, address(this), 0);
-        
         // Track principal deposited
         aavePrincipal[_token] += _amount;
         
@@ -191,9 +200,9 @@ contract Treasury is ReentrancyGuard {
         //Yeild calculation
         uint256 principal = aavePrincipal[_token];
         // Calculate yield only if current balance exceeds principal
-        uint256 yield = 0;
+        uint256 yield = currentATokenBalance - principal;
         if (currentATokenBalance > principal) {
-            yield = (currentATokenBalance * _amount) / principal - _amount;
+            yield = (yield * _amount) / principal;
         }
 
         AAVE_POOL.withdraw(_token, _amount, address(this));
@@ -206,6 +215,29 @@ contract Treasury is ReentrancyGuard {
 
         emit DefiWithdrawal(_token, _amount);
         emit YieldEarned(_token, yield);
+    }
+    
+    function getAaveTotalValue() public view returns (uint256 total) {
+        
+        for (uint256 i = 0; i < aaveAssets.length; i++) {
+            
+            address token = aaveAssets[i];
+            address aToken = aTokenMapping[token];
+            
+            uint256 aTokenBalance = IERC20(aToken).balanceOf(address(this));
+            
+            AggregatorV3Interface feed = priceFeeds[token];
+            
+            require(address(feed) != address(0), "Price feed not found");
+            
+            uint256 price = getLatestPrice(feed);
+            
+            uint8 decimals = IERC20Metadata(token).decimals();
+            
+            total += (aTokenBalance * price) / (10 ** decimals);
+            }
+
+        return total;
     }
 
 
@@ -478,7 +510,7 @@ contract Treasury is ReentrancyGuard {
         ) = priceFeed.latestRoundData();
         
         require(price > 0, "Invalid price");
-        require(timeStamp >= block.timestamp - 1 hours, "Stale price");
+        require(timeStamp >= block.timestamp - 5 minutes, "Stale price");
         
         return uint256(price);
     }
