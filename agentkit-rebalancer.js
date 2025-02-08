@@ -22,17 +22,19 @@ class RebalanceAgent {
     this.agent.registerTrigger({
       name: 'check-allocation',
       execute: async () => {
-        const ethAlloc = await this.treasury.getEthAllocation();
+        // Use getWethAllocation instead of getEthAllocation
+        const wethAlloc = await this.treasury.getWethAllocation();
         const totalValue = await this.treasury.getTotalValue();
         
         return {
-          ethAllocation: ethAlloc,
+          wethAllocation: wethAlloc,
           totalValue: totalValue.toString()
         };
       },
       condition: (result) => {
-        return result.ethAllocation > config.thresholds.ETH.max || 
-               result.ethAllocation < config.thresholds.ETH.min;
+        // Compare wethAllocation with the ETH thresholds in config
+        return result.wethAllocation > config.thresholds.ETH.max || 
+               result.wethAllocation < config.thresholds.ETH.min;
       }
     });
 
@@ -40,6 +42,7 @@ class RebalanceAgent {
       name: 'execute-rebalance',
       trigger: 'check-allocation',
       execute: async (signer) => {
+        // Create a contract instance connected to the signer so we can send a transaction.
         const contract = new ethers.Contract(
           config.treasuryAddress,
           TreasuryABI,
@@ -47,7 +50,7 @@ class RebalanceAgent {
         );
         
         const tx = await contract.checkAndRebalance();
-        return tx.wait();
+        return tx.waitForReceipt();
       }
     });
 
