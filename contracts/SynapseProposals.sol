@@ -218,17 +218,15 @@ contract SynapseProposals is ReentrancyGuard {
         // Check majority
         require(proposal.yesVotes > proposal.noVotes, "Proposal rejected");
 
+        proposal.executed = true;
         //Automate DEFi Actions with Aave
         if (proposal.pType == ProposalType.DEFI_DEPOSIT) {
             
             treasury.depositToAave(proposal.token, proposal.amount);
+        } else{
+
+            treasury.executeTransfer(proposal.recipient, proposal.amount, proposal.token);
         }
-        //****Test to see if duplication happens*****
-
-        proposal.executed = true;
-        // Execute fund transfer
-        treasury.executeTransfer(proposal.recipient, proposal.amount,proposal.token);
-
         // Emit event for proposal execution
         emit ProposalExecuted(_proposalId, msg.sender, proposal.amount, proposal.recipient);
         

@@ -37,7 +37,7 @@ contract Treasury is ReentrancyGuard {
     // STATE VARIABLES
     address public owner;
     address public proposalsContract;
-    IUniswapV2Router02 public uniswapRouter = IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
+    IUniswapV2Router02 public uniswapRouter = IUniswapV2Router02(0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008);
     address public agentKitOperator;
 
     struct AssetConfig {
@@ -54,12 +54,12 @@ contract Treasury is ReentrancyGuard {
     mapping(address => AssetConfig) public assetConfigs;
     
     //Constants
-    IAavePool public constant AAVE_POOL = IAavePool(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
+    IAavePool public constant AAVE_POOL = IAavePool(0x368EedF3f56ad10b9bC57eed4Dac65B26Bb667f6);
     uint256 public constant MAX_AAVE_EXPOSURE = 8000; // 80% of treasury
     uint256 public constant MAX_SLIPPAGE = 5; // 5% slippage protection
-    address public constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-    address public constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
-    IWETH public constant WETH = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+    address public constant USDC = 0xEbCC972B6B3eB15C0592BE1871838963d0B94278;
+    address public constant DAI = 0xe5118E47e061ab15Ca972D045b35193F673bcc36;
+    IWETH public constant WETH = IWETH(0xA1A245cc76414DC143687D9c3DE1152396f352D6);
 
     // EVENTS
     event FundsDeposited(address indexed token, uint256 amount);
@@ -111,9 +111,8 @@ contract Treasury is ReentrancyGuard {
         //Weth
         priceFeeds[address(WETH)] = AggregatorV3Interface(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419);
         //Other price feeds
-        priceFeeds[0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48] = AggregatorV3Interface(0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6); // USDC/USD
-        priceFeeds[0x6B175474E89094C44Da98b954EedeAC495271d0F] = AggregatorV3Interface(0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9); // DAI/USD
-        priceFeeds[address(WETH)] = AggregatorV3Interface(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419);
+        priceFeeds[0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48] = AggregatorV3Interface(0xA2F78ab235B91eb3Dfc231107A4dD29eA5e1eB46); // USDC/USD
+        priceFeeds[0x6B175474E89094C44Da98b954EedeAC495271d0F] = AggregatorV3Interface(0x14866185B1962B0a130951C385e7f9a9e2516D91); // DAI/USD
 
         address[] memory wethPath = new address[](2);
         wethPath[0] = address(WETH);
@@ -247,7 +246,7 @@ contract Treasury is ReentrancyGuard {
         tokens[0] = address(WETH);
         tokens[1] = USDC;
         tokens[2] = DAI;
-        tokens[3] = 0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984; // UNI
+        //tokens[3] = 0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984; // UNI
 
         
         for(uint256 i = 0; i < tokens.length; i++) {
