@@ -1,5 +1,6 @@
 // scripts/deploy.js
 const { ethers } = require("hardhat");
+require("dotenv").config();
 
 async function main() {
   // Sepolia Testnet Addresses
@@ -14,32 +15,58 @@ async function main() {
   const [deployer] = await ethers.getSigners();
   console.log("Deploying contracts with account:", deployer.address);
 
-  // Deploy SynapseProposals first
-  const SynapseProposals = await ethers.getContractFactory("SynapseProposals");
-  const synapseProposals = await SynapseProposals.deploy();
-  await synapseProposals.waitForDeployment();
-  console.log("SynapseProposals deployed to:", synapseProposals.target);
-
-  // Deploy Treasury with Sepolia addresses
+  // Deploy the Treasury contract first
   const Treasury = await ethers.getContractFactory("Treasury");
   const treasury = await Treasury.deploy();
-  await treasury.waitForDeployment();
-  console.log("Treasury deployed to:", treasury.target);
+  await treasury.deployed();
+  console.log("Treasury deployed at:", treasury.address);
 
-  // Initialize contracts
-  console.log("Initializing contracts...");
-  const tx1 = await treasury.setProposalsContract(synapseProposals.target);
-  await tx1.wait();
-  console.log("Proposals contract set in Treasury");
 
-  // Set AgentKit operator if needed
-  const tx2 = await treasury.setAgentKitOperator(agentAddress);
-  await tx2.wait();
+  //Verify connectivity by calling getBalance()
+  let treasuryBalance = await treasury.getBalance();
+  console.log("Initial Treasury balance:", treasuryBalance.toString());
+
+
+  //Deploy the SynapseProposals contract with Treasury address as a parameter
+  const SynapseProposals = await ethers.getContractFactory("SynapseProposals");
+  const synapseProposals = await SynapseProposals.deploy(treasury.address);
+  await synapseProposals.deployed();
+  console.log("SynapseProposals deployed at:", synapseProposals.address);
+
+  //Link the SynapseProposals contract to the Treasury contract
+  const setProposalTx = await treasury.setProposalsContract(synapseProposals.address);
+  await setProposalTx.wait();
+  console.log("Treasury proposals contract set to:", synapseProposals.address);
+
+  //Initialize the Coinbase AgentKit agent
+  const { initializeAgent } = require("@coinbase/agentkit");
+
+  //using environment variables to create or load an agent
+  const agent = await initializeAgent({
+    apiKeyName: process.env.CDP_API_KEY_NAME,
+    apiKeyPrivateKey: process.env.CDP_API_KEY_PRIVATE_KEY,
+    openAIApiKey: process.env.OPENAI_API_KEY,
+    networkId: process.env.NETWORK_ID || "base-sepolia"
+  });
+
+  //Agent's wallet address
+  const agentWalletAddress = agent.wallet.address;
+  console.log("AgentKit agent wallet address:", agentWalletAddress);
+
+  //Set Agent as the agentKitOperator in the Treasury contract
+  const setAgentTx = await treasury.setAgentKitOperator(agentWalletAddress);
+  await setAgentTx.wait();
+  console.log("LFGGG!!! Treasury agent operator set to:", agentWalletAddress);
+
+  //Add deployer as an authorized proposer with voting power Corruption LOL
+  const proposerTx = await synapseProposals.addProposer(deployer.address, 100);
+  await proposerTx.wait();
+  console.log("Deployer added as authorized proposer with voting power 100 - You can stay mad ;D");
 }
 
 main()
   .then(() => process.exit(0))
   .catch((error) => {
-    console.error(error);
+    console.error("Deployment error:",error);
     process.exit(1);
   });
