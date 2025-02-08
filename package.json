@@ -644,6 +644,7 @@
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "hardhat-deploy": "^0.14.0",
     "mocha": "^10.8.2"
   },
   "scripts": {
