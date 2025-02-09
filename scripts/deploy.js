@@ -54,6 +54,19 @@ async function main() {
   const proposerTx = await synapseProposals.addProposer(deployer.address, 100);
   await proposerTx.wait();
   console.log("Deployer added as authorized proposer with voting power 100 - You can stay mad ;D");
+
+  //Create 3 Agents as DAO members 
+  console.log("Creating 3 autonomous proposal agents...");
+  for (let i = 0; i < 3; i++) {
+    const randomWallet = ethers.Wallet.createRandom();
+    // Connect the wallet to your provider
+    const agentSigner = randomWallet.connect(ethers.provider);
+    // Add this agent as an authorized agent (voting power 50)
+    const addAgentTx = await synapseProposals.addAgent(agentSigner.address, 50);
+    await addAgentTx.wait();
+    console.log(`Autonomous Proposal Agent ${i+1} added: ${agentSigner.address} with 50 voting power`);
+  }
+
 }
 
 main()
