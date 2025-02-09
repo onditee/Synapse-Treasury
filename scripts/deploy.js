@@ -36,6 +36,11 @@ async function main() {
   await setProposalTx.wait();
   console.log("Treasury proposals contract set to:", proposalAddress);
 
+  // Debug: log the environment variables to ensure they are loaded
+  console.log("CDP_API_KEY_NAME:", process.env.CDP_API_KEY_NAME);
+  console.log("CDP_API_KEY_PRIVATE_KEY:", process.env.CDP_API_KEY_PRIVATE_KEY);
+  console.log("NETWORK_ID:", process.env.NETWORK_ID);
+
   //Initialize the Coinbase AgentKit agent
   const { CdpWalletProvider, AgentKit } = require("@coinbase/agentkit");
 
