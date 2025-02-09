@@ -10,7 +10,7 @@ async function main() {
   // Deploy the Treasury contract first
   const Treasury = await ethers.getContractFactory("Treasury");
   const treasury = await Treasury.deploy();
-  await treasury.deployed();
+  await treasury.waitForDeployment();
   console.log("Treasury deployed at:", treasury.address);
 
 
@@ -22,7 +22,7 @@ async function main() {
   //Deploy the SynapseProposals contract with Treasury address as a parameter
   const SynapseProposals = await ethers.getContractFactory("SynapseProposals");
   const synapseProposals = await SynapseProposals.deploy(treasury.address);
-  await synapseProposals.deployed();
+  await synapseProposals.waitForDeployment();
   console.log("SynapseProposals deployed at:", synapseProposals.address);
 
   //Link the SynapseProposals contract to the Treasury contract
