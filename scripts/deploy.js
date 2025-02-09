@@ -11,7 +11,10 @@ async function main() {
   const Treasury = await ethers.getContractFactory("Treasury");
   const treasury = await Treasury.deploy();
   await treasury.waitForDeployment();
-  console.log("Treasury deployed at:", treasury.address);
+
+  const treasuryAddress = await treasury.getAddress();
+
+  console.log("Treasury deployed at:", treasuryAddress);
 
 
   //Verify connectivity by calling getBalance()
@@ -21,28 +24,35 @@ async function main() {
 
   //Deploy the SynapseProposals contract with Treasury address as a parameter
   const SynapseProposals = await ethers.getContractFactory("SynapseProposals");
-  const synapseProposals = await SynapseProposals.deploy(treasury.address);
+  const synapseProposals = await SynapseProposals.deploy(treasuryAddress);
   await synapseProposals.waitForDeployment();
-  console.log("SynapseProposals deployed at:", synapseProposals.address);
+
+  const proposalAddress = await synapseProposals.getAddress();
+
+  console.log("SynapseProposals deployed at:", proposalAddress);
 
   //Link the SynapseProposals contract to the Treasury contract
-  const setProposalTx = await treasury.setProposalsContract(synapseProposals.address);
+  const setProposalTx = await treasury.setProposalsContract(proposalAddress);
   await setProposalTx.wait();
-  console.log("Treasury proposals contract set to:", synapseProposals.address);
+  console.log("Treasury proposals contract set to:", proposalAddress);
 
   //Initialize the Coinbase AgentKit agent
-  const { initializeAgent } = require("@coinbase/agentkit");
+  const { CdpWalletProvider, AgentKit } = require("@coinbase/agentkit");
 
   //using environment variables to create or load an agent
-  const agent = await initializeAgent({
+  const walletProvider = await CdpWalletProvider.configureWithWallet({
     apiKeyName: process.env.CDP_API_KEY_NAME,
-    apiKeyPrivateKey: process.env.CDP_API_KEY_PRIVATE_KEY,
-    openAIApiKey: process.env.OPENAI_API_KEY,
-    networkId: process.env.NETWORK_ID || "base-sepolia"
+    apiKeyPrivate: process.env.CDP_API_KEY_PRIVATE_KEY,
+    networkId: process.env.NETWORK_ID || "base-sepolia",
+  });
+
+   // Create an AgentKit instance from the wallet provider
+   const agentKit = await AgentKit.from({
+    walletProvider,
   });
 
   //Agent's wallet address
-  const agentWalletAddress = agent.wallet.address;
+  const agentWalletAddress = agentKit.getAddress()
   console.log("AgentKit agent wallet address:", agentWalletAddress);
 
   //Set Agent as the agentKitOperator in the Treasury contract
