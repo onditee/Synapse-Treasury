@@ -40,24 +40,31 @@ async function main() {
   console.log("CDP_API_KEY_NAME:", process.env.CDP_API_KEY_NAME);
   console.log("CDP_API_KEY_PRIVATE_KEY:", process.env.CDP_API_KEY_PRIVATE_KEY);
   console.log("NETWORK_ID:", process.env.NETWORK_ID);
-
-  //Initialize the Coinbase AgentKit agent
+  
+  // Initialize the Coinbase AgentKit agent
+  
   const { CdpWalletProvider, AgentKit } = require("@coinbase/agentkit");
 
-  //using environment variables to create or load an agent
-  const walletProvider = await CdpWalletProvider.configureWithWallet({
-    apiKeyName: process.env.CDP_API_KEY_NAME,
-    apiKeyPrivate: process.env.CDP_API_KEY_PRIVATE_KEY,
+  // Different approach for configuration
+  try {
+    
+    const walletProvider = await CdpWalletProvider.configure({
+      
+      apiKey: {
+      name: process.env.CDP_API_KEY_NAME,
+      privateKey: process.env.CDP_API_KEY_PRIVATE_KEY,
+    },
+    
     networkId: process.env.NETWORK_ID || "base-sepolia",
   });
-
-   // Create an AgentKit instance from the wallet provider
-   const agentKit = await AgentKit.from({
+  
+  // Create an AgentKit instance from the wallet provider
+  const agentKit = await AgentKit.from({
     walletProvider,
   });
 
-  //Agent's wallet address
-  const agentWalletAddress = agentKit.getAddress()
+  // Agent's wallet address
+  const agentWalletAddress = agentKit.getAddress();
   console.log("AgentKit agent wallet address:", agentWalletAddress);
 
   //Set Agent as the agentKitOperator in the Treasury contract
@@ -81,6 +88,11 @@ async function main() {
     await addAgentTx.wait();
     console.log(`Autonomous Proposal Agent ${i+1} added: ${agentSigner.address} with 50 voting power`);
   }
+
+} catch (error) {
+  console.error("Error initializing AgentKit:", error);
+  throw error; // Re-throw to exit the script
+}
 
 }
 
